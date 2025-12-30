@@ -57,11 +57,11 @@
                     </div>
                 </div>
 
-                <!-- Pedidos Aprovados (Geral) -->
+                <!-- Pedidos Finalizados (Geral) -->
                 <div class="bg-white rounded-lg shadow p-6 card-hover">
                     <div class="flex items-center justify-between">
                         <div>
-                            <p class="text-sm text-gray-600">Aprovados Hoje</p>
+                            <p class="text-sm text-gray-600">Finalizados Hoje</p>
                             <p id="stat-aprovado" class="text-3xl font-bold text-purple-600 mt-2">0</p>
                             <p class="text-xs text-gray-500 mt-1">Total: <span id="stat-valor-aprovado" class="font-semibold">R$ 0</span></p>
                         </div>
@@ -197,14 +197,14 @@
                 document.getElementById('stat-vendas').textContent = vendas.length;
                 document.getElementById('stat-vendas-pendentes').textContent = vendasPendentes;
                 
-                // Aprovados HOJE (compras + vendas)
+                // Finalizados HOJE (compras + vendas)
                 const hoje = new Date();
                 hoje.setHours(0, 0, 0, 0);
                 const aprovadosHoje = todosPedidos.filter(p => {
-                    if (p.status !== 'APROVADO' || !p.data_aprovacao) return false;
-                    const dataAprov = new Date(p.data_aprovacao);
-                    dataAprov.setHours(0, 0, 0, 0);
-                    return dataAprov.getTime() === hoje.getTime();
+                    if (p.status !== 'FINALIZADO' || !p.data_finalizacao) return false;
+                    const dataFinal = new Date(p.data_finalizacao);
+                    dataFinal.setHours(0, 0, 0, 0);
+                    return dataFinal.getTime() === hoje.getTime();
                 });
                 
                 const valorAprovado = aprovadosHoje.reduce((sum, p) => sum + parseFloat(p.total || 0), 0);
@@ -245,20 +245,25 @@
                     containerPendentes.innerHTML = pendentes.slice(0, 5).map(p => {
                         const tipo = p.tipo_pedido === 'VENDA' ? 'VENDA' : 'COMPRA';
                         const badgeColor = tipo === 'VENDA' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800';
+                        const detailUrl = tipo === 'VENDA' ? `/pages/venda-detalhe.html?id=${p.id}` : `/pages/pedido-detalhe.html?id=${p.id}`;
+                        const nomeExibir = tipo === 'VENDA' ? (p.cliente?.nome || 'Sem cliente') : (p.fornecedor?.nome || 'Sem fornecedor');
+                        
                         return `
-                            <div class="flex items-center justify-between p-3 bg-yellow-50 rounded-lg hover:bg-yellow-100 transition border-l-4 border-yellow-400">
-                                <div class="flex-1">
-                                    <div class="flex items-center gap-2">
-                                        <p class="font-medium text-gray-900">${p.numero}</p>
-                                        <span class="text-xs px-2 py-1 rounded ${badgeColor}">${tipo}</span>
+                            <a href="${detailUrl}" class="block">
+                                <div class="flex items-center justify-between p-3 bg-yellow-50 rounded-lg hover:bg-yellow-100 transition border-l-4 border-yellow-400 cursor-pointer">
+                                    <div class="flex-1">
+                                        <div class="flex items-center gap-2">
+                                            <p class="font-medium text-gray-900">${p.numero}</p>
+                                            <span class="text-xs px-2 py-1 rounded ${badgeColor}">${tipo}</span>
+                                        </div>
+                                        <p class="text-sm text-gray-600">${nomeExibir}</p>
                                     </div>
-                                    <p class="text-sm text-gray-600">${p.solicitante?.full_name || 'N/A'}</p>
+                                    <div class="text-right">
+                                        <p class="text-sm font-semibold text-gray-900">${formatCurrency(p.total)}</p>
+                                        <p class="text-xs text-gray-500">${formatDate(p.created_at)}</p>
+                                    </div>
                                 </div>
-                                <div class="text-right">
-                                    <p class="text-sm font-semibold text-gray-900">${formatCurrency(p.total)}</p>
-                                    <p class="text-xs text-gray-500">${formatDate(p.created_at)}</p>
-                                </div>
-                            </div>
+                            </a>
                         `;
                     }).join('');
                 }
