@@ -349,7 +349,7 @@
         document.getElementById('form-pagamento').addEventListener('submit', async (e) => {
             e.preventDefault();
             
-            const vendaId = parseInt(document.getElementById('pagamento-venda-id').value);
+            const vendaId = document.getElementById('pagamento-venda-id').value;
             const valor = parseFloat(document.getElementById('pagamento-valor').value);
             const forma = document.getElementById('pagamento-forma').value;
             const observacao = document.getElementById('pagamento-observacao').value;
