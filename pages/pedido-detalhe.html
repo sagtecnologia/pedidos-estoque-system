@@ -32,10 +32,22 @@
                     <!-- Itens -->
                     <div class="bg-white rounded-lg shadow">
                         <div class="px-6 py-4 border-b flex justify-between items-center">
-                            <h3 class="text-lg font-semibold">Itens do Pedido</h3>
-                            <button id="btn-add-item" onclick="openModal('modal-item')" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm">
-                                + Adicionar Item
-                            </button>
+                            <div class="flex items-center space-x-3">
+                                <h3 class="text-lg font-semibold">Itens do Pedido</h3>
+                                <!-- Indicador de edição de preços para admins -->
+                                <div id="indicator-edicao-preco" class="hidden bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs font-medium">
+                                    <i class="fas fa-dollar-sign mr-1"></i>
+                                    ADMIN: Clique em "Alterar Preço" para modificar valores
+                                </div>
+                            </div>
+                            <div class="flex gap-2">
+                                <button id="btn-alterar-preco-lote" onclick="abrirModalAlterarPrecoLote()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm" style="display: none;">
+                                    💰 Alterar Preço em Lote
+                                </button>
+                                <button id="btn-add-item" onclick="openModal('modal-item')" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm">
+                                    + Adicionar Item
+                                </button>
+                            </div>
                         </div>
                         <div class="p-6">
                             <table class="min-w-full">
@@ -172,6 +184,132 @@
         </div>
     </div>
 
+    <!-- Modal Alterar Preço em Lote -->
+    <div id="modal-alterar-preco-lote" class="modal-backdrop hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div class="flex justify-between items-center px-6 py-4 border-b">
+                <h3 class="text-lg font-semibold text-gray-900">Alterar Preço em Lote</h3>
+                <button onclick="closeModal('modal-alterar-preco-lote')" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <form id="form-alterar-preco-lote" class="px-6 py-4">
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Selecione o Produto*</label>
+                    <select id="select-produto-lote" class="w-full px-4 py-2 border border-gray-300 rounded-lg" onchange="atualizarInfoProdutoLote()" required>
+                        <option value="">Selecione um produto...</option>
+                    </select>
+                    <p id="info-itens-produto" class="text-xs text-gray-500 mt-1 hidden"></p>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Novo Preço Unitário*</label>
+                    <input type="number" id="novo-preco-lote" step="0.01" min="0.01" required 
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" 
+                        placeholder="0.00" oninput="calcularNovoTotalLote()">
+                </div>
+
+                <div id="preview-alteracao-lote" class="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg hidden">
+                    <h4 class="font-medium text-sm text-blue-900 mb-2">Prévia da Alteração:</h4>
+                    <div class="text-sm space-y-1">
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Total Atual:</span>
+                            <span id="total-atual-lote" class="font-medium">R$ 0,00</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-600">Novo Total:</span>
+                            <span id="novo-total-lote" class="font-bold text-blue-600">R$ 0,00</span>
+                        </div>
+                        <div class="flex justify-between pt-2 border-t border-blue-300">
+                            <span class="text-gray-600">Diferença:</span>
+                            <span id="diferenca-lote" class="font-bold">R$ 0,00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="p-3 bg-yellow-50 border border-yellow-200 rounded-lg mb-4">
+                    <p class="text-xs text-yellow-800">⚠️ Esta ação irá atualizar o preço de TODOS os itens (sabores) deste produto no pedido.</p>
+                </div>
+                
+                <div class="flex gap-3">
+                    <button type="button" onclick="closeModal('modal-alterar-preco-lote')" 
+                        class="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+                        Cancelar
+                    </button>
+                    <button type="submit" 
+                        class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                        Aplicar Alteração
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Editar Preço de Compra -->
+    <div id="modal-editar-preco" class="modal-backdrop hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div class="flex justify-between items-center px-6 py-4 border-b">
+                <h3 class="text-lg font-semibold text-gray-900">Alterar Preço de Compra</h3>
+                <button onclick="closeModal('modal-editar-preco')" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="px-6 py-4">
+                <form id="form-editar-preco">
+                    <input type="hidden" id="editar-preco-item-id">
+                    
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Produto</label>
+                        <input type="text" id="editar-preco-item-nome" readonly class="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-gray-700">
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Quantidade</label>
+                        <input type="text" id="editar-preco-item-quantidade" readonly class="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-gray-700">
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Preço Atual</label>
+                        <input type="text" id="editar-preco-atual" readonly class="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-gray-700">
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Novo Preço Unitário*</label>
+                        <input type="number" id="editar-preco-novo" step="0.01" min="0.01" required 
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                    </div>
+
+                    <div class="mb-4 p-3 bg-gray-50 rounded-lg">
+                        <div class="flex justify-between text-sm">
+                            <span class="text-gray-600">Novo Subtotal:</span>
+                            <span id="editar-preco-novo-subtotal" class="font-bold text-gray-900">R$ 0,00</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                        <div class="flex">
+                            <i class="fas fa-exclamation-triangle text-yellow-600 mt-0.5 mr-2"></i>
+                            <div class="text-sm text-yellow-800">
+                                <strong>Atenção:</strong> Esta alteração irá atualizar o valor de compra deste item específico e recalcular o total do pedido.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex gap-3">
+                        <button type="button" onclick="closeModal('modal-editar-preco')" 
+                            class="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+                            Cancelar
+                        </button>
+                        <button type="submit" 
+                            class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                            Alterar Preço
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Editar Observações -->
     <div id="modal-observacoes" class="modal-backdrop hidden">
         <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4">
@@ -298,9 +436,16 @@
         let saboresTemporarios = []; // Lista temporária de sabores antes de salvar
         let produtoAtual = null; // Produto selecionado no modal
 
+        console.log('🚀 SCRIPT CARREGADO - Timestamp:', new Date().toISOString());
+        console.log('🚀 Versão do arquivo: LOTE-v1.2');
+
         (async () => {
             await checkAuth();
             currentUser = await getCurrentUser();
+            
+            console.log('🔍 Usuário carregado:', currentUser);
+            console.log('🔍 Role do usuário:', currentUser?.role);
+            console.log('🔍 É ADMIN?', currentUser?.role === 'ADMIN');
             
             document.getElementById('navbar').innerHTML = createNavbar();
             document.getElementById('sidebar-container').innerHTML = createSidebar();
@@ -308,6 +453,8 @@
             await initSidebar();
             
             pedidoId = getUrlParameter('id');
+            console.log('🔍 Pedido ID:', pedidoId);
+            
             if (!pedidoId) {
                 showToast('Pedido não encontrado', 'error');
                 redirect('/pages/pedidos.html');
@@ -610,8 +757,16 @@
         async function loadPedido() {
             try {
                 showLoading(true);
+                
+                // Debug: verificar usuário atual
+                console.log('🔍 Debug currentUser:', currentUser);
+                console.log('🔍 Debug role:', currentUser?.role);
+                
                 pedido = await getPedido(pedidoId);
                 if (!pedido) return;
+
+                console.log('🔍 Debug pedido:', pedido);
+                console.log('🔍 Debug status:', pedido.status);
 
             document.getElementById('pedido-numero').textContent = `Pedido ${pedido.numero}`;
             document.getElementById('pedido-status').innerHTML = getStatusBadge(pedido.status);
@@ -641,23 +796,47 @@
             // Ações baseadas no status
             const acoesEl = document.getElementById('acoes-pedido');
             const btnAddItem = document.getElementById('btn-add-item');
+            const indicadorEdicaoPreco = document.getElementById('indicator-edicao-preco');
             
             // Botão de impressão sempre visível
             let botoesHTML = '<button onclick="imprimirPedidoCompra(\'' + pedidoId + '\')" class="bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700">🖨️ Imprimir</button>';
             
-            if (pedido.status === 'RASCUNHO' && pedido.solicitante_id === currentUser.id) {
+            const podeEditar = pedido.status === 'RASCUNHO' && pedido.solicitante_id === currentUser.id;
+            
+            if (podeEditar) {
                 // Solicitante pode editar, finalizar e excluir
                 botoesHTML += ' <button onclick="finalizarPedidoHandler()" class="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700">✅ Finalizar Pedido</button>';
                 botoesHTML += ' <button onclick="excluirPedido()" class="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700">🗑️ Excluir Pedido</button>';
-                btnAddItem.classList.remove('hidden');
+                btnAddItem.style.display = 'block';
+                
+                // Mostrar botão de alteração em lote se houver itens (igual ao padrão de venda)
+                const btnAlterarPrecoLote = document.getElementById('btn-alterar-preco-lote');
+                if (btnAlterarPrecoLote) {
+                    const itens = await getItensPedido(pedidoId);
+                    btnAlterarPrecoLote.style.display = itens.length > 0 ? 'block' : 'none';
+                }
+                
+                indicadorEdicaoPreco.classList.add('hidden');
             } else if (pedido.status === 'FINALIZADO') {
                 // Quando está FINALIZADO, apenas ADMIN pode cancelar
-                if (currentUser.role === 'ADMIN') {
+                if (currentUser && currentUser.role === 'ADMIN') {
                     botoesHTML += ' <button onclick="openModal(\'modal-cancelar\')" class="bg-orange-600 text-white px-6 py-2 rounded-lg hover:bg-orange-700">🚫 Cancelar Pedido</button>';
+                    indicadorEdicaoPreco.classList.remove('hidden');
+                } else {
+                    indicadorEdicaoPreco.classList.add('hidden');
                 }
-                btnAddItem.classList.add('hidden');
+                btnAddItem.style.display = 'none';
+                const btnAlterarPrecoLote = document.getElementById('btn-alterar-preco-lote');
+                if (btnAlterarPrecoLote) {
+                    btnAlterarPrecoLote.style.display = 'none';
+                }
             } else {
-                btnAddItem.classList.add('hidden');
+                btnAddItem.style.display = 'none';
+                const btnAlterarPrecoLote = document.getElementById('btn-alterar-preco-lote');
+                if (btnAlterarPrecoLote) {
+                    btnAlterarPrecoLote.style.display = 'none';
+                }
+                indicadorEdicaoPreco.classList.add('hidden');
             }
             
             acoesEl.innerHTML = botoesHTML;
@@ -685,6 +864,48 @@
             tbody.innerHTML = itens.map(item => {
                 const produtoNome = item.produto?.nome || 'N/A';
                 const sabor = item.sabor?.sabor ? ` - ${item.sabor.sabor}` : '';
+                
+                // Determinar ações disponíveis baseado no status e permissões
+                let acoesHTML = '';
+                
+                // Debug log detalhado
+                const isRascunho = pedido.status === 'RASCUNHO';
+                const isFinalizado = pedido.status === 'FINALIZADO';
+                const isAdmin = currentUser && currentUser.role === 'ADMIN';
+                
+                console.log('🔍 Verificações:', {
+                    status: pedido.status,
+                    isRascunho,
+                    isFinalizado,
+                    userRole: currentUser?.role,
+                    isAdmin,
+                    tipoPedido: pedido.tipo_pedido
+                });
+                
+                if (isRascunho) {
+                    // Status RASCUNHO: editar e remover item
+                    acoesHTML = `
+                        <button onclick="editarItem('${item.id}', ${item.quantidade}, ${item.preco_unitario})" class="text-blue-600 hover:text-blue-800 text-sm mr-2" title="Editar">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button onclick="removeItem('${item.id}')" class="text-red-600 hover:text-red-800 text-sm" title="Remover">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    `;
+                } else if (isFinalizado && isAdmin) {
+                    // Status FINALIZADO + ADMIN: apenas alterar preço
+                    console.log('✅ Condições atendidas - mostrando botão de editar preço');
+                    acoesHTML = `
+                        <button onclick="editarPrecoCompra('${item.id}', '${produtoNome}${sabor}', ${item.quantidade}, ${item.preco_unitario})" 
+                                class="text-orange-600 hover:text-orange-800 text-sm" title="Alterar Preço de Compra">
+                            <i class="fas fa-dollar-sign"></i> Alterar Preço
+                        </button>
+                    `;
+                } else {
+                    console.log('❌ Condições não atendidas:', { isFinalizado, isAdmin });
+                    acoesHTML = '-';
+                }
+                
                 return `
                     <tr class="border-t">
                         <td class="px-4 py-3 text-sm">
@@ -696,14 +917,7 @@
                         <td class="px-4 py-3 text-sm">${formatCurrency(item.preco_unitario)}</td>
                         <td class="px-4 py-3 text-sm font-semibold">${formatCurrency(item.subtotal)}</td>
                         <td class="px-4 py-3 text-sm">
-                            ${pedido.status === 'RASCUNHO' ? `
-                                <button onclick="editarItem('${item.id}', ${item.quantidade}, ${item.preco_unitario})" class="text-blue-600 hover:text-blue-800 text-sm mr-2" title="Editar">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <button onclick="removeItem('${item.id}')" class="text-red-600 hover:text-red-800 text-sm" title="Remover">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            ` : '-'}
+                            ${acoesHTML}
                         </td>
                     </tr>
                 `;
@@ -763,6 +977,255 @@
         // Event listeners para atualizar subtotal em tempo real
         document.getElementById('editar-item-quantidade').addEventListener('input', atualizarSubtotalEdicao);
         document.getElementById('editar-item-preco').addEventListener('input', atualizarSubtotalEdicao);
+
+        // Função para editar preço de compra (quando pedido está finalizado)
+        window.editarPrecoCompra = function(itemId, nomeCompleto, quantidade, precoAtual) {
+            // Preencher o modal
+            document.getElementById('editar-preco-item-id').value = itemId;
+            document.getElementById('editar-preco-item-nome').value = nomeCompleto;
+            document.getElementById('editar-preco-item-quantidade').value = `${quantidade} ${pedido.itens?.[0]?.produto?.unidade || 'UN'}`;
+            document.getElementById('editar-preco-atual').value = formatCurrency(precoAtual);
+            document.getElementById('editar-preco-novo').value = precoAtual;
+            
+            // Calcular e mostrar subtotal inicial
+            atualizarNovoSubtotalPreco();
+            
+            // Abrir modal
+            openModal('modal-editar-preco');
+        };
+
+        // Função para atualizar o novo subtotal no modal de preço
+        function atualizarNovoSubtotalPreco() {
+            const quantidadeTexto = document.getElementById('editar-preco-item-quantidade').value;
+            const quantidade = parseFloat(quantidadeTexto.split(' ')[0]) || 0;
+            const novoPreco = parseFloat(document.getElementById('editar-preco-novo').value) || 0;
+            const subtotal = quantidade * novoPreco;
+            document.getElementById('editar-preco-novo-subtotal').textContent = formatCurrency(subtotal);
+        }
+
+        // Event listener para atualizar subtotal do novo preço em tempo real
+        document.getElementById('editar-preco-novo').addEventListener('input', atualizarNovoSubtotalPreco);
+
+        // =====================================================
+        // FUNCIONALIDADE DE ALTERAÇÃO EM LOTE (padrão igual à venda)
+        // =====================================================
+
+        function abrirModalAlterarPrecoLote() {
+            getItensPedido(pedidoId).then(itensData => {
+                if (itensData.length === 0) {
+                    showToast('Não há itens no pedido', 'warning');
+                    return;
+                }
+
+                // Obter produtos únicos do pedido
+                const produtosUnicos = {};
+                itensData.forEach(item => {
+                    if (!produtosUnicos[item.produto_id]) {
+                        produtosUnicos[item.produto_id] = {
+                            id: item.produto_id,
+                            nome: item.produto?.nome || 'N/A',
+                            itens: []
+                        };
+                    }
+                    produtosUnicos[item.produto_id].itens.push(item);
+                });
+
+                // Preencher select com produtos
+                const select = document.getElementById('select-produto-lote');
+                select.innerHTML = '<option value="">Selecione um produto...</option>';
+                
+                Object.values(produtosUnicos).forEach(produto => {
+                    const option = document.createElement('option');
+                    option.value = produto.id;
+                    option.textContent = `${produto.nome} (${produto.itens.length} iten(s))`;
+                    option.dataset.itens = JSON.stringify(produto.itens);
+                    select.appendChild(option);
+                });
+
+                // Limpar campos
+                document.getElementById('novo-preco-lote').value = '';
+                document.getElementById('preview-alteracao-lote').classList.add('hidden');
+                document.getElementById('info-itens-produto').classList.add('hidden');
+
+                openModal('modal-alterar-preco-lote');
+            }).catch(error => {
+                console.error('Erro ao carregar itens:', error);
+                showToast('Erro ao carregar itens do pedido', 'error');
+            });
+        }
+
+        function atualizarInfoProdutoLote() {
+            const select = document.getElementById('select-produto-lote');
+            const selectedOption = select.options[select.selectedIndex];
+            const infoElement = document.getElementById('info-itens-produto');
+            
+            if (!selectedOption.value) {
+                infoElement.classList.add('hidden');
+                document.getElementById('preview-alteracao-lote').classList.add('hidden');
+                return;
+            }
+
+            const itensData = JSON.parse(selectedOption.dataset.itens);
+            const quantidadeTotal = itensData.reduce((sum, item) => sum + parseFloat(item.quantidade || 0), 0);
+            
+            infoElement.textContent = `Este produto possui ${itensData.length} sabor(es) no pedido, totalizando ${quantidadeTotal} unidades.`;
+            infoElement.classList.remove('hidden');
+            
+            // Se já tiver preço digitado, recalcular
+            calcularNovoTotalLote();
+        }
+
+        function calcularNovoTotalLote() {
+            const select = document.getElementById('select-produto-lote');
+            const selectedOption = select.options[select.selectedIndex];
+            const novoPreco = parseFloat(document.getElementById('novo-preco-lote').value);
+            const previewElement = document.getElementById('preview-alteracao-lote');
+            
+            if (!selectedOption.value || !novoPreco || novoPreco <= 0) {
+                previewElement.classList.add('hidden');
+                return;
+            }
+
+            const itensData = JSON.parse(selectedOption.dataset.itens);
+            
+            // Calcular total atual
+            const totalAtual = itensData.reduce((sum, item) => sum + parseFloat(item.subtotal || 0), 0);
+            
+            // Calcular novo total
+            const novoTotal = itensData.reduce((sum, item) => {
+                const quantidade = parseFloat(item.quantidade || 0);
+                return sum + (quantidade * novoPreco);
+            }, 0);
+            
+            // Calcular diferença
+            const diferenca = novoTotal - totalAtual;
+            
+            // Atualizar preview
+            document.getElementById('total-atual-lote').textContent = formatCurrency(totalAtual);
+            document.getElementById('novo-total-lote').textContent = formatCurrency(novoTotal);
+            
+            const diferencaElement = document.getElementById('diferenca-lote');
+            diferencaElement.textContent = formatCurrency(Math.abs(diferenca));
+            
+            if (diferenca > 0) {
+                diferencaElement.className = 'font-bold text-green-600';
+                diferencaElement.textContent = '+ ' + formatCurrency(diferenca);
+            } else if (diferenca < 0) {
+                diferencaElement.className = 'font-bold text-red-600';
+                diferencaElement.textContent = '- ' + formatCurrency(Math.abs(diferenca));
+            } else {
+                diferencaElement.className = 'font-bold text-gray-600';
+                diferencaElement.textContent = formatCurrency(0);
+            }
+            
+            previewElement.classList.remove('hidden');
+        }
+
+        document.getElementById('form-alterar-preco-lote').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const select = document.getElementById('select-produto-lote');
+            const selectedOption = select.options[select.selectedIndex];
+            const novoPreco = parseFloat(document.getElementById('novo-preco-lote').value);
+            
+            if (!selectedOption.value || !novoPreco || novoPreco <= 0) {
+                showToast('Preencha todos os campos', 'error');
+                return;
+            }
+
+            const itensData = JSON.parse(selectedOption.dataset.itens);
+            
+            if (!confirm(`Tem certeza que deseja alterar o preço de TODOS os ${itensData.length} itens deste produto para ${formatCurrency(novoPreco)}?`)) {
+                return;
+            }
+
+            try {
+                showLoading(true);
+                
+                // Atualizar cada item do produto
+                for (const item of itensData) {
+                    const { error } = await supabase
+                        .from('pedido_itens')
+                        .update({ preco_unitario: novoPreco })
+                        .eq('id', item.id);
+
+                    if (error) {
+                        throw new Error(`Erro ao atualizar item: ${error.message}`);
+                    }
+                }
+                
+                // Recalcular total do pedido
+                await recalcularTotalPedido(pedidoId);
+                
+                showToast('Preços alterados com sucesso!', 'success');
+                closeModal('modal-alterar-preco-lote');
+                await loadPedido();
+                
+            } catch (error) {
+                console.error('Erro ao alterar preços:', error);
+                showToast(error.message || 'Erro ao alterar preços', 'error');
+            } finally {
+                showLoading(false);
+            }
+        });
+
+        // Form de edição de preço (pedido finalizado)
+        document.getElementById('form-editar-preco').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const itemId = document.getElementById('editar-preco-item-id').value;
+            const novoPreco = parseFloat(document.getElementById('editar-preco-novo').value);
+
+            if (novoPreco <= 0) {
+                showToast('O novo preço deve ser maior que zero', 'error');
+                return;
+            }
+
+            if (!confirm('Tem certeza que deseja alterar o preço de compra deste item?\n\nEsta ação irá recalcular o total do pedido.')) {
+                return;
+            }
+
+            try {
+                showLoading(true);
+                
+                console.log('💰 Alterando preço do item:', itemId, 'para:', novoPreco);
+                
+                const { data, error } = await supabase
+                    .from('pedido_itens')
+                    .update({
+                        preco_unitario: novoPreco
+                        // subtotal é calculado automaticamente pelo banco
+                    })
+                    .eq('id', itemId)
+                    .select();
+
+                if (error) {
+                    console.error('❌ Erro no Supabase:', error);
+                    throw error;
+                }
+                
+                if (!data || data.length === 0) {
+                    console.warn('⚠️ Nenhum item foi atualizado.');
+                    throw new Error('Não foi possível alterar o preço. Verifique suas permissões.');
+                }
+
+                console.log('✅ Preço alterado:', data);
+                
+                // Recalcular o total do pedido
+                console.log('🔄 Recalculando total do pedido...');
+                await recalcularTotalPedido(pedidoId);
+                
+                showToast('Preço de compra alterado com sucesso!', 'success');
+                closeModal('modal-editar-preco');
+                await loadPedido();
+            } catch (error) {
+                console.error('❌ Erro ao alterar preço:', error);
+                const mensagemErro = error.message || 'Erro ao alterar preço de compra';
+                showToast(mensagemErro, 'error');
+            } finally {
+                showLoading(false);
+            }
+        });
 
         // Form de edição de item
         document.getElementById('form-editar-item').addEventListener('submit', async (e) => {
