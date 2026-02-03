@@ -74,7 +74,7 @@ async function getItensPedido(pedidoId) {
             .from('pedido_itens')
             .select(`
                 *,
-                produto:produtos(codigo, nome, unidade, preco),
+                produto:produtos(codigo, nome, unidade, preco, preco_compra),
                 sabor:produto_sabores(id, sabor, quantidade)
             `)
             .eq('pedido_id', pedidoId)
@@ -149,6 +149,11 @@ async function addItemPedido(pedidoId, item) {
         // Incluir sabor_id se fornecido
         if (item.sabor_id) {
             itemData.sabor_id = item.sabor_id;
+        }
+
+        // Incluir preco_compra_entrada se fornecido (para rastrear custo exato na venda)
+        if (item.preco_compra_entrada !== undefined) {
+            itemData.preco_compra_entrada = item.preco_compra_entrada;
         }
 
         const { data, error } = await supabase

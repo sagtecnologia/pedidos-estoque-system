@@ -705,7 +705,8 @@
                         produto_id: produtoAtual.id,
                         sabor_id: sabor.sabor_id,
                         quantidade: sabor.quantidade,
-                        preco_unitario: sabor.preco_unitario
+                        preco_unitario: sabor.preco_unitario,
+                        preco_compra_entrada: produtoAtual.preco_compra || 0
                     };
                     
                     console.log('  → Adicionando:', sabor.sabor_nome, '-', sabor.quantidade, 'UN');

@@ -880,7 +880,8 @@
                         produto_id: produtoAtual.id,
                         sabor_id: sabor.sabor_id,
                         quantidade: sabor.quantidade,
-                        preco_unitario: sabor.preco_unitario
+                        preco_unitario: sabor.preco_unitario,
+                        preco_compra_entrada: produtoAtual.preco_compra || 0
                     };
                     
                     console.log('  → Adicionando:', sabor.sabor_nome, '-', sabor.quantidade, 'UN');
@@ -1533,7 +1534,7 @@
         async function cancelarVendaHandler(novoStatus) {
             // VALIDAÇÃO: Impedir cancelamento de vendas já canceladas ou em rascunho
             if (venda.status === 'CANCELADO') {
-                showToast('❌ Esta venda já foi cancelada anteriormente!', 'error');
+                showToast('❌ BLOQUEIO: Esta venda já foi cancelada anteriormente! Cancelamentos duplos não são permitidos.', 'error');
                 closeModal('modal-cancelar');
                 return;
             }
@@ -1544,9 +1545,41 @@
                 return;
             }
             
+            // ✅ VALIDAÇÃO ADICIONAL: Verificar se pode cancelar
+            try {
+                const { data: validacao, error: erroValidacao } = await supabase
+                    .rpc('pode_cancelar_pedido', { p_pedido_id: vendaId });
+                
+                if (erroValidacao) {
+                    showToast('❌ Erro ao validar cancelamento: ' + erroValidacao.message, 'error');
+                    closeModal('modal-cancelar');
+                    return;
+                }
+                
+                if (!validacao[0].pode_cancelar) {
+                    let mensagemErro = '❌ CANCELAMENTO BLOQUEADO\n\n' + validacao[0].motivo;
+                    if (validacao[0].conflitos && validacao[0].conflitos.length > 0) {
+                        mensagemErro += '\n\nDetalhes:\n' + validacao[0].conflitos.join('\n');
+                    }
+                    showToast(mensagemErro, 'error', 8000);
+                    closeModal('modal-cancelar');
+                    return;
+                }
+            } catch (erro) {
+                console.warn('⚠️ Validação RPC não disponível, continuando com validação local', erro);
+                // Continuar com validação local se RPC não estiver disponível
+            }
+            
             const mensagem = novoStatus === 'CANCELADO' 
-                ? 'Tem certeza que deseja CANCELAR DEFINITIVAMENTE esta venda? Os itens retornarão ao estoque.' 
-                : 'Tem certeza que deseja CANCELAR e REABRIR esta venda como rascunho?';
+                ? '⚠️ ATENÇÃO: Você está prestes a CANCELAR DEFINITIVAMENTE esta venda!\n\n' +
+                  '• Os itens retornarão ao estoque\n' +
+                  '• Esta ação é IRREVERSÍVEL\n' +
+                  '• Cancelamentos duplos não são permitidos\n\n' +
+                  'Deseja continuar?' 
+                : '⚠️ Você está prestes a CANCELAR e REABRIR esta venda como rascunho.\n\n' +
+                  '• O estoque permanecerá intacto\n' +
+                  '• Você poderá fazer novo cancelamento definitivo\n\n' +
+                  'Deseja continuar?';
             
             if (!confirm(mensagem)) {
                 closeModal('modal-cancelar');
@@ -1633,6 +1666,15 @@
                     .select();
                 
                 if (error) {
+                    // Tratamento específico para erros de cancelamento
+                    if (error.message && error.message.includes('BLOQUEIO')) {
+                        console.error('❌ CANCELAMENTO BLOQUEADO:', error);
+                        throw new Error('BLOQUEIO: ' + error.message);
+                    }
+                    if (error.message && error.message.includes('RESTRIÇÃO')) {
+                        console.error('❌ RESTRIÇÃO DE CANCELAMENTO:', error);
+                        throw new Error(error.message);
+                    }
                     console.error('❌ Erro ao atualizar status:', error);
                     throw error;
                 }
@@ -1640,8 +1682,8 @@
                 console.log('✅ Venda atualizada com sucesso:', data);
                 
                 const msgSucesso = novoStatus === 'CANCELADO' 
-                    ? 'Venda cancelada definitivamente! Itens devolvidos ao estoque.' 
-                    : 'Venda cancelada e reaberta como rascunho!';
+                    ? '✅ Venda cancelada definitivamente! Os itens foram devolvidos ao estoque com sucesso.' 
+                    : '✅ Venda cancelada e reaberta como rascunho! O estoque permaneceu intacto.';
                 
                 showToast(msgSucesso, 'success');
                 closeModal('modal-cancelar');
@@ -1651,7 +1693,14 @@
                 await loadVenda();
                 console.log('✅ Venda recarregada. Novo status:', venda.status);
             } catch (error) {
-                handleError(error, 'Erro ao cancelar venda');
+                // Tratamento específico para erros de cancelamento
+                if (error.message && error.message.includes('BLOQUEIO')) {
+                    handleError(error, 'Cancelamento Bloqueado');
+                } else if (error.message && error.message.includes('RESTRIÇÃO')) {
+                    handleError(error, 'Restrição de Cancelamento');
+                } else {
+                    handleError(error, 'Erro ao cancelar venda');
+                }
             } finally {
                 showLoading(false);
             }
