@@ -228,6 +228,7 @@
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Quantidade</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Est. Anterior</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Est. Novo</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Valor Compra Entrada</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Pedido / Cliente/Fornecedor</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Usuário</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Observação</th>
@@ -406,7 +407,16 @@
         function calcularTotaisEstoque() {
             let totalCompra = 0;
             let totalVenda = 0;
-            let totalSabores = 0; // Contar quantidade de sabores
+            let totalSabores = 0;
+            
+            // Mapear ultimo preco_compra_entrada por sabor
+            const precoCompraEntrada = {};
+            todasMovimentacoes.forEach(mov => {
+                if (mov.tipo === 'ENTRADA' && mov.preco_compra_entrada && mov.preco_compra_entrada > 0) {
+                    const key = mov.sabor_id || mov.produto_id;
+                    precoCompraEntrada[key] = mov.preco_compra_entrada;
+                }
+            });
             
             // Calcular com base nos sabores em estoque
             todosSabores.forEach(sabor => {
@@ -596,6 +606,16 @@
                     ? ((s.preco_venda - s.preco_compra) / s.preco_compra * 100).toFixed(1) + '%'
                     : '-';
                 
+                // ✅ BUSCAR PREÇO DE ENTRADA MAIS RECENTE DESTE SABOR
+                const ultimoPrecoEntrada = todasMovimentacoes
+                    .filter(m => m.tipo === 'ENTRADA' && m.sabor_id === s.sabor_id && m.preco_compra_entrada && m.preco_compra_entrada > 0)
+                    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+                
+                const precoCompraAtual = ultimoPrecoEntrada ? ultimoPrecoEntrada.preco_compra_entrada : (s.preco_compra || 0);
+                const margemAtual = s.preco_venda && precoCompraAtual 
+                    ? ((s.preco_venda - precoCompraAtual) / precoCompraAtual * 100).toFixed(1) + '%'
+                    : '-';
+                
                 return `
                     <tr class="hover:bg-gray-50">
                         <td class="px-6 py-4 text-sm text-gray-700">${s.marca || '-'}</td>
@@ -603,9 +623,9 @@
                         <td class="px-6 py-4 text-sm font-medium text-blue-600">${s.sabor}</td>
                         <td class="px-6 py-4 text-sm"><span class="font-semibold ${situacao}">${s.quantidade}</span></td>
                         <td class="px-6 py-4 text-sm">${badge}</td>
-                        <td class="px-6 py-4 text-sm text-gray-600">${formatCurrency(s.preco_compra || 0)}</td>
+                        <td class="px-6 py-4 text-sm text-gray-600">${formatCurrency(precoCompraAtual)}</td>
                         <td class="px-6 py-4 text-sm font-medium text-gray-900">${formatCurrency(s.preco_venda || 0)}</td>
-                        <td class="px-6 py-4 text-sm text-green-600">${margem}</td>
+                        <td class="px-6 py-4 text-sm text-green-600">${margemAtual}</td>
                     </tr>
                 `;
             }).join('');
@@ -626,7 +646,7 @@
             const tbody = document.getElementById('tbody-mov-produto');
             
             if (movimentacoes.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" class="px-6 py-4 text-center text-gray-500">Nenhuma movimentação encontrada</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="10" class="px-6 py-4 text-center text-gray-500">Nenhuma movimentação encontrada</td></tr>';
                 return;
             }
             
@@ -648,6 +668,11 @@
                     </div>`;
                 }
                 
+                // ✅ MOSTRAR VALOR DE COMPRA DA ENTRADA
+                const valorCompra = m.tipo === 'ENTRADA' && m.preco_compra_entrada && m.preco_compra_entrada > 0
+                    ? formatCurrency(m.preco_compra_entrada)
+                    : (m.tipo === 'ENTRADA' ? '-' : 'N/A');
+                
                 return `
                     <tr class="hover:bg-gray-50">
                         <td class="px-6 py-4 text-sm text-gray-600">${formatDateTime(m.created_at)}</td>
@@ -656,6 +681,7 @@
                         <td class="px-6 py-4 text-sm font-medium">${m.quantidade}</td>
                         <td class="px-6 py-4 text-sm text-gray-600">${m.estoque_anterior}</td>
                         <td class="px-6 py-4 text-sm text-gray-600">${m.estoque_novo}</td>
+                        <td class="px-6 py-4 text-sm font-medium text-blue-600">${valorCompra}</td>
                         <td class="px-6 py-4">${pedidoInfo}</td>
                         <td class="px-6 py-4 text-sm text-gray-600">${m.usuario?.full_name || '-'}</td>
                         <td class="px-6 py-4 text-sm text-gray-500">${m.observacao || '-'}</td>
@@ -925,8 +951,15 @@
 
             return saboresFiltrados.map(s => {
                 const produto = todosProdutos.find(p => p.id === s.produto_id);
-                const margemBruta = s.preco_venda && s.preco_compra
-                    ? ((s.preco_venda - s.preco_compra) / s.preco_compra * 100)
+                
+                // ✅ BUSCAR PREÇO DE ENTRADA MAIS RECENTE DESTE SABOR
+                const ultimoPrecoEntrada = todasMovimentacoes
+                    .filter(m => m.tipo === 'ENTRADA' && m.sabor_id === s.id && m.preco_compra_entrada && m.preco_compra_entrada > 0)
+                    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+                
+                const precoCompraAtual = ultimoPrecoEntrada ? ultimoPrecoEntrada.preco_compra_entrada : (s.preco_compra || 0);
+                const margemBruta = s.preco_venda && precoCompraAtual
+                    ? ((s.preco_venda - precoCompraAtual) / precoCompraAtual * 100)
                     : 0;
                 
                 return {
@@ -935,7 +968,7 @@
                     'Sabor': s.sabor || '-',
                     'Quantidade': s.quantidade || 0,
                     'Situação': s.status_estoque || '-',
-                    'Preço Compra': s.preco_compra ? `R$ ${s.preco_compra.toFixed(2)}` : '-',
+                    'Preço Compra': precoCompraAtual ? `R$ ${precoCompraAtual.toFixed(2)}` : '-',
                     'Preço Venda': s.preco_venda ? `R$ ${s.preco_venda.toFixed(2)}` : '-',
                     'Margem %': margemBruta.toFixed(1) + '%'
                 };

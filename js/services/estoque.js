@@ -36,7 +36,12 @@ async function listMovimentacoes(filters = {}) {
         const { data, error } = await query;
 
         if (error) throw error;
-        return data;
+        
+        // ✅ Adicionar preco_compra_entrada ao resultado (será usado na exibição)
+        return data.map(mov => ({
+            ...mov,
+            preco_compra_entrada: mov.preco_compra_entrada || 0
+        }));
         
     } catch (error) {
         handleError(error, 'Erro ao listar movimentações');
