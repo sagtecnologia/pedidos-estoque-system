@@ -421,8 +421,9 @@
                 // Somar a quantidade em estoque deste sabor
                 const quantidade = sabor.quantidade || 0;
                 totalSabores += quantidade;
-                const precoCompra = produto.preco_compra || 0;
-                const precoVenda = produto.preco_venda || 0;
+                // Usar o preço de compra da movimentação (já calculado na view), não do cadastro do produto
+                const precoCompra = sabor.preco_compra || 0;
+                const precoVenda = sabor.preco_venda || 0;
                 
                 totalCompra += quantidade * precoCompra;
                 totalVenda += quantidade * precoVenda;
