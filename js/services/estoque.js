@@ -153,3 +153,35 @@ async function getRelatorioEstoque() {
         return [];
     }
 }
+
+// =====================================================
+// ALTERAR SABOR DE PRODUTO EM ESTOQUE
+// =====================================================
+async function alterarSaborEstoque(saborId, novoSabor, produtoId, observacao = '') {
+    try {
+        showLoading(true);
+        
+        const user = await getCurrentUser();
+
+        // Chamar função do banco
+        const { data, error } = await supabase
+            .rpc('alterar_sabor_estoque', {
+                p_sabor_id: saborId,
+                p_novo_sabor: novoSabor,
+                p_produto_id: produtoId,
+                p_observacao: observacao,
+                p_usuario_id: user.id
+            });
+
+        if (error) throw error;
+
+        showToast('Sabor alterado com sucesso!', 'success');
+        return data;
+        
+    } catch (error) {
+        handleError(error, 'Erro ao alterar sabor do estoque');
+        return null;
+    } finally {
+        showLoading(false);
+    }
+}

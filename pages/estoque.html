@@ -203,10 +203,11 @@
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Preço Compra</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Preço Venda</th>
                                     <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Margem</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ações</th>
                                 </tr>
                             </thead>
                             <tbody id="tbody-estoque-sabor" class="bg-white divide-y divide-gray-200">
-                                <tr><td colspan="8" class="px-6 py-4 text-center text-gray-500">Carregando...</td></tr>
+                                <tr><td colspan="9" class="px-6 py-4 text-center text-gray-500">Carregando...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -270,6 +271,78 @@
             </div>
         </div>
     </main>
+
+    <!-- Modal: Alterar Sabor -->
+    <div id="modal-alterar-sabor" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div class="bg-gradient-to-r from-orange-500 to-orange-600 px-6 py-4 rounded-t-lg">
+                <h2 class="text-xl font-bold text-white">
+                    <i class="fas fa-edit mr-2"></i>Alterar Sabor do Produto
+                </h2>
+            </div>
+
+            <div class="p-6">
+                <div class="space-y-4">
+                    <!-- Info do produto -->
+                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <p class="text-sm text-gray-600">Marca</p>
+                        <p id="modal-marca" class="text-lg font-semibold text-gray-900">-</p>
+                        
+                        <p class="text-sm text-gray-600 mt-3">Produto</p>
+                        <p id="modal-produto" class="text-lg font-semibold text-gray-900">-</p>
+                        
+                        <p class="text-sm text-gray-600 mt-3">Sabor Atual</p>
+                        <p id="modal-sabor-atual" class="text-lg font-semibold text-orange-600">-</p>
+                    </div>
+
+                    <!-- Novo sabor -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Novo Sabor</label>
+                        <input 
+                            id="modal-novo-sabor" 
+                            type="text" 
+                            placeholder="Digite o novo sabor" 
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                        >
+                        <p class="text-xs text-gray-500 mt-1">Ou selecione um existente abaixo:</p>
+                        <select 
+                            id="modal-sabores-existentes" 
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg mt-2 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                            onchange="document.getElementById('modal-novo-sabor').value = this.value"
+                        >
+                            <option value="">-- Selecione --</option>
+                        </select>
+                    </div>
+
+                    <!-- Observação -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Observação</label>
+                        <textarea 
+                            id="modal-observacao" 
+                            placeholder="Ex: Corrigir discrepância com estoque físico" 
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                            rows="2"
+                        ></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-gray-50 px-6 py-4 rounded-b-lg flex gap-3 justify-end">
+                <button 
+                    onclick="fecharModalAlterarSabor()" 
+                    class="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300 transition"
+                >
+                    Cancelar
+                </button>
+                <button 
+                    onclick="confirmarAlteracaoSabor()" 
+                    class="px-4 py-2 text-white bg-orange-600 rounded-lg hover:bg-orange-700 transition"
+                >
+                    <i class="fas fa-check mr-2"></i>Confirmar
+                </button>
+            </div>
+        </div>
+    </div>
 
     <div id="loading" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div class="bg-white p-6 rounded-lg"><div class="spinner mx-auto"></div><p class="mt-4 text-gray-700">Carregando...</p></div>
@@ -616,6 +689,16 @@
                     ? ((s.preco_venda - precoCompraAtual) / precoCompraAtual * 100).toFixed(1) + '%'
                     : '-';
                 
+                // Verificar se quantidade é maior que 0 para permitir edição
+                const podeEditar = s.quantidade > 0;
+                const buttonClass = podeEditar 
+                    ? "text-blue-600 hover:text-blue-800 hover:underline cursor-pointer" 
+                    : "text-gray-400 cursor-not-allowed opacity-50";
+                const buttonDisabled = podeEditar ? "" : "disabled";
+                const titleText = podeEditar 
+                    ? "Alterar sabor" 
+                    : "Não é possível alterar: quantidade zerada";
+                
                 return `
                     <tr class="hover:bg-gray-50">
                         <td class="px-6 py-4 text-sm text-gray-700">${s.marca || '-'}</td>
@@ -626,6 +709,16 @@
                         <td class="px-6 py-4 text-sm text-gray-600">${formatCurrency(precoCompraAtual)}</td>
                         <td class="px-6 py-4 text-sm font-medium text-gray-900">${formatCurrency(s.preco_venda || 0)}</td>
                         <td class="px-6 py-4 text-sm text-green-600">${margemAtual}</td>
+                        <td class="px-6 py-4 text-sm">
+                            <button 
+                                onclick="${podeEditar ? `abrirModalAlterarSabor('${s.sabor_id}', '${s.sabor}', '${s.produto_id}')` : ''}" 
+                                class="${buttonClass}"
+                                title="${titleText}"
+                                ${buttonDisabled}
+                            >
+                                <i class="fas fa-edit"></i> Editar
+                            </button>
+                        </td>
                     </tr>
                 `;
             }).join('');
@@ -1244,6 +1337,113 @@
                 headers: ['Marca', 'Produto', 'Sabor', 'Qtd', 'Situação', 'P. Venda'],
                 rows: dados.map(d => [d.Marca, d.Produto, d.Sabor, d.Quantidade, d.Situação, d['Preço Venda']])
             };
+        }
+
+        // ========================================
+        // FUNÇÕES PARA ALTERAR SABOR
+        // ========================================
+
+        let saborSelecionadoAtual = {
+            id: null,
+            sabor: null,
+            produto_id: null
+        };
+
+        function abrirModalAlterarSabor(saborId, saborAtual, produtoId) {
+            // Buscar informações do sabor
+            const sabor = todosSabores.find(s => s.sabor_id === saborId);
+            const produto = todosProdutos.find(p => p.id === produtoId);
+
+            if (!sabor || !produto) {
+                showToast('Erro ao carregar informações do sabor', 'error');
+                return;
+            }
+
+            // Validação: não permitir alterar sabores com quantidade 0
+            if (sabor.quantidade <= 0) {
+                showToast('⚠️ Não é possível alterar sabores com quantidade zerada', 'warning');
+                return;
+            }
+
+            saborSelecionadoAtual = {
+                id: saborId,
+                sabor: saborAtual,
+                produto_id: produtoId
+            };
+
+            // Preencher modal
+            document.getElementById('modal-marca').textContent = produto.marca || '-';
+            document.getElementById('modal-produto').textContent = produto.nome;
+            document.getElementById('modal-sabor-atual').textContent = saborAtual;
+            document.getElementById('modal-novo-sabor').value = '';
+            document.getElementById('modal-observacao').value = '';
+
+            // Carregar sabores existentes do produto
+            const selectSabores = document.getElementById('modal-sabores-existentes');
+            selectSabores.innerHTML = '<option value="">-- Selecione --</option>';
+            
+            const saboresDoProducto = todosSabores.filter(s => s.produto_id === produtoId && s.sabor !== saborAtual);
+            saboresDoProducto.forEach(s => {
+                const option = document.createElement('option');
+                option.value = s.sabor;
+                option.textContent = s.sabor;
+                selectSabores.appendChild(option);
+            });
+
+            // Abrir modal
+            document.getElementById('modal-alterar-sabor').classList.remove('hidden');
+        }
+
+        function fecharModalAlterarSabor() {
+            document.getElementById('modal-alterar-sabor').classList.add('hidden');
+            saborSelecionadoAtual = { id: null, sabor: null, produto_id: null };
+        }
+
+        async function confirmarAlteracaoSabor() {
+            const novoSabor = document.getElementById('modal-novo-sabor').value.trim();
+            const observacao = document.getElementById('modal-observacao').value.trim();
+
+            if (!novoSabor) {
+                showToast('Por favor, digite ou selecione um novo sabor', 'warning');
+                return;
+            }
+
+            if (novoSabor.toLowerCase() === saborSelecionadoAtual.sabor.toLowerCase()) {
+                showToast('O novo sabor deve ser diferente do sabor atual', 'warning');
+                return;
+            }
+
+            try {
+                showLoading(true);
+
+                // Chamar função do banco para alterar sabor
+                const { data, error } = await supabase
+                    .rpc('alterar_sabor_estoque', {
+                        p_sabor_id: saborSelecionadoAtual.id,
+                        p_novo_sabor: novoSabor,
+                        p_produto_id: saborSelecionadoAtual.produto_id,
+                        p_observacao: observacao
+                    });
+
+                if (error) {
+                    console.error('Erro ao alterar sabor:', error);
+                    showToast('Erro ao alterar sabor: ' + error.message, 'error');
+                    return;
+                }
+
+                showToast(`Sabor alterado com sucesso de "${saborSelecionadoAtual.sabor}" para "${novoSabor}"!`, 'success');
+                fecharModalAlterarSabor();
+
+                // Recarregar dados
+                await carregarDados();
+                renderizarTabAtiva();
+
+            } catch (error) {
+                console.error('Erro ao alterar sabor:', error);
+                showToast('Erro ao alterar sabor: ' + error.message, 'error');
+            } finally {
+                showLoading(false);
+            }
         }
     </script>
 </body>
