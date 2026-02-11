@@ -1571,33 +1571,28 @@
                     console.log('✅ Pedido cancelado com sucesso via função SQL');
                     
                 } else if (novoStatus === 'RASCUNHO' && pedido.status === 'FINALIZADO') {
-                    // ⚠️ REABERTURA COMO RASCUNHO: NÃO REVERTER ESTOQUE!
+                    // ✅ REABERTURA COMO RASCUNHO: REVERTER ESTOQUE
                     // 
-                    // LÓGICA CORRETA:
-                    // 1. Quando reabrir, manter o pedido FINALIZADO no histórico de estoque
-                    // 2. Quando refinalizar, o sistema vai detectar que JÁ foi finalizado antes
-                    //    e NÃO vai duplicar movimentações
-                    // 3. Se o usuário mudar quantidades/itens, a finalização vai calcular a diferença
-                    //
-                    // PROBLEMA SE REVERTER:
-                    // - Reabrir: Remove do estoque (ex: COMPRA volta a -20)
-                    // - Refinalizar: Adiciona de novo (+20) → DUPLICA!
+                    // LÓGICA:
+                    // 1. Quando reabrir, REVERTE o estoque (remove as movimentações)
+                    // 2. Status volta para RASCUNHO (pode editar)
+                    // 3. Quando refinalizar, o estoque é adicionado de novo
+                    // 4. Usuário pode mudar quantidades antes de refinalizar
                     
-                    console.log('🔄 Reabrindo pedido como RASCUNHO (SEM mexer no estoque)');
+                    console.log('🔄 Reabrindo pedido como RASCUNHO (revertendo estoque)');
                     
-                    // ✅ APENAS mudar status para RASCUNHO
-                    // NÃO mexer no estoque - ele já está correto
-                    const { error } = await supabase
-                        .from('pedidos')
-                        .update({ 
-                            status: 'RASCUNHO',
-                            data_finalizacao: null // Limpar data de finalização
-                        })
-                        .eq('id', pedidoId);
+                    // ✅ USAR FUNÇÃO SQL que reverte o estoque
+                    const { data, error } = await supabase.rpc('reabrir_pedido_para_rascunho', {
+                        p_pedido_id: pedidoId,
+                        p_usuario_id: currentUser.id
+                    });
                     
-                    if (error) throw error;
+                    if (error) {
+                        console.error('❌ Erro ao reabrir pedido:', error);
+                        throw error;
+                    }
                     
-                    console.log('✅ Pedido reaberto como RASCUNHO. Estoque mantido intacto.');
+                    console.log('✅ Pedido reaberto como RASCUNHO. Estoque revertido.');
                     
                 } else {
                     // Outros casos (ex: APROVADO → RASCUNHO sem reverter estoque)

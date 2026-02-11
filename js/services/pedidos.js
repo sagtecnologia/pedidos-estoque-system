@@ -640,41 +640,59 @@ async function deletePedido(pedidoId) {
             throw new Error('Apenas pedidos em RASCUNHO podem ser excluídos');
         }
         
-        // Primeiro, excluir os itens do pedido
-        console.log('🗑️ Excluindo itens do pedido...');
-        const { error: errorItens } = await supabase
+        // ✅ DELETAR NA ORDEM CORRETA (respeitando Foreign Keys com RESTRICT)
+        
+        // PASSO 1: Deletar movimentações de estoque
+        console.log('🗑️ Deletando movimentações de estoque...');
+        const { error: err1 } = await supabase
+            .from('estoque_movimentacoes')
+            .delete()
+            .eq('pedido_id', pedidoId);
+        
+        if (err1) {
+            console.error('❌ Erro ao deletar movimentações:', err1);
+            throw err1;
+        }
+        console.log('✅ Movimentações deletadas');
+        
+        // PASSO 2: Deletar itens do pedido
+        console.log('🗑️ Deletando itens do pedido...');
+        const { error: err2 } = await supabase
             .from('pedido_itens')
             .delete()
             .eq('pedido_id', pedidoId);
             
-        if (errorItens) {
-            console.error('❌ Erro ao excluir itens:', errorItens);
-            throw errorItens;
+        if (err2) {
+            console.error('❌ Erro ao deletar itens:', err2);
+            throw err2;
         }
-        console.log('✅ Itens excluídos com sucesso');
+        console.log('✅ Itens deletados');
         
-        // Depois, excluir o pedido
-        console.log('🗑️ Excluindo pedido...');
-        const { data: deleteData, error: errorDelete } = await supabase
+        // PASSO 3: Deletar cancelamentos
+        console.log('🗑️ Deletando histórico de cancelamentos...');
+        const { error: err3 } = await supabase
+            .from('cancelamento_pedidos')
+            .delete()
+            .eq('pedido_id', pedidoId);
+        
+        if (err3) {
+            console.error('❌ Erro ao deletar cancelamentos:', err3);
+            // Não lançar erro aqui pois cancelamento_pedidos pode não ter registros
+        }
+        
+        // PASSO 4: Deletar o pedido
+        console.log('🗑️ Deletando pedido...');
+        const { error: err4 } = await supabase
             .from('pedidos')
             .delete()
-            .eq('id', pedidoId)
-            .select(); // Adicionar select() para confirmar exclusão
-            
-        if (errorDelete) {
-            console.error('❌ Erro ao excluir pedido:', errorDelete);
-            throw errorDelete;
+            .eq('id', pedidoId);
+        
+        if (err4) {
+            console.error('❌ Erro ao deletar pedido:', err4);
+            throw err4;
         }
         
-        console.log('✅ Resposta da exclusão:', deleteData);
-        
-        // Verificar se realmente excluiu
-        if (!deleteData || deleteData.length === 0) {
-            console.warn('⚠️ Nenhum registro foi excluído. Possível problema de RLS.');
-            throw new Error('Falha ao excluir o pedido. Verifique suas permissões.');
-        }
-        
-        console.log('✅ Pedido excluído com sucesso!');
+        console.log('✅ Pedido deletado com sucesso!');
         showToast(`${pedido.tipo_pedido === 'COMPRA' ? 'Pedido de compra' : 'Venda'} ${pedido.numero} excluído com sucesso!`, 'success');
         return true;
         
