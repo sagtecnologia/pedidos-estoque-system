@@ -422,6 +422,30 @@
                 // Carregar produtos
                 todosProdutos = await listProdutos();
                 
+                // Carregar custos mais recentes de cada produto (da tabela estoque_movimentacoes)
+                const { data: custos } = await supabase
+                    .from('estoque_movimentacoes')
+                    .select('produto_id, preco_compra_entrada')
+                    .in('tipo', ['ENTRADA', 'DEVOLUCAO_FORNECEDOR'])
+                    .order('created_at', { ascending: false });
+                
+                if (custos) {
+                    // Criar mapa de custos (última entrada para cada produto)
+                    const mapaCustos = {};
+                    custos.forEach(mov => {
+                        if (!mapaCustos[mov.produto_id] && mov.preco_compra_entrada) {
+                            mapaCustos[mov.produto_id] = mov.preco_compra_entrada;
+                        }
+                    });
+                    
+                    // Adicionar custos encontrados aos produtos
+                    todosProdutos.forEach(prod => {
+                        if (mapaCustos[prod.id] && !prod.preco_compra) {
+                            prod.preco_compra = mapaCustos[prod.id];
+                        }
+                    });
+                }
+                
                 // Carregar vendas finalizadas com itens
                 const { data: pedidos, error } = await supabase
                     .from('pedidos')
@@ -685,10 +709,8 @@
                     
                     lucrosPorSabor[key].quantidade += item.quantidade;
                     lucrosPorSabor[key].receita += item.preco_unitario * item.quantidade;
-                    // Usar preco_compra_entrada da entrada se disponível, senão usar do cadastro do produto
-                    const precoCompra = item.preco_compra_entrada !== null && item.preco_compra_entrada !== undefined 
-                        ? item.preco_compra_entrada 
-                        : (produto.preco_compra || 0);
+                    // Usar preco_compra do produto (do JOIN na query)
+                    const precoCompra = (produto.preco_compra || 0);
                     lucrosPorSabor[key].custo += precoCompra * item.quantidade;
                 }
             }
