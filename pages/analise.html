@@ -668,7 +668,7 @@
                     if (filtroAtual.sabor && item.sabor_id !== filtroAtual.sabor) return;
                     
                     receitaTotal += item.preco_unitario * item.quantidade;
-                    // Usar preco_compra_entrada (>0), senão preco_compra (>0), senão preco_unitario, senão 0
+                    // Prioridade correta: preco_compra_entrada > produto.preco_compra > preco_unitario > 0
                     let precoCompraResumo = 0;
                     if (item.preco_compra_entrada > 0) {
                         precoCompraResumo = item.preco_compra_entrada;
@@ -784,7 +784,7 @@
                     
                     lucrosPorMarca[marca].quantidade += item.quantidade;
                     lucrosPorMarca[marca].receita += item.preco_unitario * item.quantidade;
-                    // Usar preco_compra_entrada (>0), senão preco_compra (>0), senão preco_unitario, senão 0
+                    // Prioridade correta: preco_compra_entrada > produto.preco_compra > preco_unitario > 0
                     let precoCompra = 0;
                     if (item.preco_compra_entrada > 0) {
                         precoCompra = item.preco_compra_entrada;
@@ -853,7 +853,7 @@
                     
                     lucrosPorProduto[key].quantidade += item.quantidade;
                     lucrosPorProduto[key].receita += item.preco_unitario * item.quantidade;
-                    // Usar preco_compra_entrada (>0), senão preco_compra (>0), senão preco_unitario, senão 0
+                    // Prioridade correta: preco_compra_entrada > produto.preco_compra > preco_unitario > 0
                     let precoCompra = 0;
                     if (item.preco_compra_entrada > 0) {
                         precoCompra = item.preco_compra_entrada;
@@ -921,7 +921,7 @@
                     
                     lucrosPorSabor[key].quantidade += item.quantidade;
                     lucrosPorSabor[key].receita += item.preco_unitario * item.quantidade;
-                    // Usar preco_compra_entrada (>0), senão preco_compra (>0), senão preco_unitario, senão 0
+                    // Prioridade correta: preco_compra_entrada > produto.preco_compra > preco_unitario > 0
                     let precoCompra = 0;
                     if (item.preco_compra_entrada > 0) {
                         precoCompra = item.preco_compra_entrada;
@@ -1159,7 +1159,7 @@
                     if (filtroAtual.produto && produto.id !== filtroAtual.produto) return;
                     if (filtroAtual.sabor && item.sabor_id !== filtroAtual.sabor) return;
                     
-                    // Usar preco_compra_entrada (>0), senão preco_compra (>0), senão preco_unitario, senão 0
+                    // Prioridade correta: preco_compra_entrada > produto.preco_compra > preco_unitario > 0
                     let custoUnitario = 0;
                     if (item.preco_compra_entrada > 0) {
                         custoUnitario = item.preco_compra_entrada;
