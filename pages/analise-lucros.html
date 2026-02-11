@@ -484,14 +484,20 @@
         function filtrarVendas() {
             let vendas = [...vendasFinalizadas];
             
-            // Filtro de data
-            if (filtroAtual.dataInicio) {
-                vendas = vendas.filter(v => new Date(v.created_at) >= new Date(filtroAtual.dataInicio));
-            }
-            if (filtroAtual.dataFim) {
-                const dataFim = new Date(filtroAtual.dataFim);
-                dataFim.setHours(23, 59, 59);
-                vendas = vendas.filter(v => new Date(v.created_at) <= dataFim);
+            // Filtro de data - Comparar como string (YYYY-MM-DD)
+            if (filtroAtual.dataInicio || filtroAtual.dataFim) {
+                vendas = vendas.filter(v => {
+                    // Extrair apenas a data da venda (sem horário, sem timezone)
+                    const dataVenda = v.created_at.split('T')[0];
+                    
+                    if (filtroAtual.dataInicio && dataVenda < filtroAtual.dataInicio) {
+                        return false;
+                    }
+                    if (filtroAtual.dataFim && dataVenda > filtroAtual.dataFim) {
+                        return false;
+                    }
+                    return true;
+                });
             }
             
             return vendas;
