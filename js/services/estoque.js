@@ -37,11 +37,35 @@ async function listMovimentacoes(filters = {}) {
 
         if (error) throw error;
         
-        // ✅ Adicionar preco_compra_entrada ao resultado (será usado na exibição)
-        return data.map(mov => ({
-            ...mov,
-            preco_compra_entrada: mov.preco_compra_entrada || 0
+        // ✅ Buscar preco_unitario de pedido_itens quando for pedido de COMPRA
+        const movimentacoesComPreco = await Promise.all(data.map(async (mov) => {
+            let precoCompraEntrada = mov.preco_unitario || 0;
+            
+            // Se tiver pedido_id e for tipo ENTRADA, buscar o preço do pedido_itens
+            if (mov.pedido_id && mov.tipo === 'ENTRADA' && mov.pedido?.tipo_pedido === 'COMPRA') {
+                try {
+                    const { data: itemData, error: itemError } = await supabase
+                        .from('pedido_itens')
+                        .select('preco_unitario')
+                        .eq('pedido_id', mov.pedido_id)
+                        .eq('produto_id', mov.produto_id)
+                        .maybeSingle();
+                    
+                    if (!itemError && itemData?.preco_unitario) {
+                        precoCompraEntrada = itemData.preco_unitario;
+                    }
+                } catch (err) {
+                    console.warn('Erro ao buscar preco_unitario:', err);
+                }
+            }
+            
+            return {
+                ...mov,
+                preco_compra_entrada: precoCompraEntrada
+            };
         }));
+        
+        return movimentacoesComPreco;
         
     } catch (error) {
         handleError(error, 'Erro ao listar movimentações');
@@ -117,13 +141,42 @@ async function getHistoricoProduto(produtoId) {
             .select(`
                 *,
                 usuario:users(full_name),
-                pedido:pedidos(numero)
+                pedido:pedidos(numero, tipo_pedido)
             `)
             .eq('produto_id', produtoId)
             .order('created_at', { ascending: false });
 
         if (error) throw error;
-        return data;
+        
+        // ✅ Buscar preco_unitario de pedido_itens quando for pedido de COMPRA
+        const historicoComPreco = await Promise.all(data.map(async (mov) => {
+            let precoCompraEntrada = mov.preco_unitario || 0;
+            
+            // Se tiver pedido_id e for tipo ENTRADA, buscar o preço do pedido_itens
+            if (mov.pedido_id && mov.tipo === 'ENTRADA' && mov.pedido?.tipo_pedido === 'COMPRA') {
+                try {
+                    const { data: itemData, error: itemError } = await supabase
+                        .from('pedido_itens')
+                        .select('preco_unitario')
+                        .eq('pedido_id', mov.pedido_id)
+                        .eq('produto_id', mov.produto_id)
+                        .maybeSingle();
+                    
+                    if (!itemError && itemData?.preco_unitario) {
+                        precoCompraEntrada = itemData.preco_unitario;
+                    }
+                } catch (err) {
+                    console.warn('Erro ao buscar preco_unitario:', err);
+                }
+            }
+            
+            return {
+                ...mov,
+                preco_compra_entrada: precoCompraEntrada
+            };
+        }));
+        
+        return historicoComPreco;
         
     } catch (error) {
         handleError(error, 'Erro ao buscar histórico do produto');
