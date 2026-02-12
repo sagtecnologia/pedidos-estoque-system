@@ -82,6 +82,18 @@
                                 <dt class="text-gray-600 text-sm">Quantidade Total:</dt>
                                 <dd id="venda-quantidade-total" class="font-medium text-gray-700">0 UN</dd>
                             </div>
+                            <div class="flex justify-between pt-2 border-t">
+                                <dt class="text-gray-600 text-sm">Custo Total:</dt>
+                                <dd id="venda-custo-total" class="font-medium text-gray-700">R$ 0,00</dd>
+                            </div>
+                            <div class="flex justify-between pt-2 border-t">
+                                <dt class="text-gray-600 text-sm">Margem de Lucro:</dt>
+                                <dd id="venda-margem-lucro" class="font-medium text-purple-600">R$ 0,00</dd>
+                            </div>
+                            <div class="flex justify-between">
+                                <dt class="text-gray-600 text-xs">Percentual:</dt>
+                                <dd id="venda-margem-percentual" class="text-sm font-semibold text-purple-600">0%</dd>
+                            </div>
                             <div id="pagamento-info" class="hidden pt-3 border-t space-y-2">
                                 <div class="flex justify-between text-sm">
                                     <dt class="text-gray-600">Valor Pago:</dt>
@@ -1048,6 +1060,76 @@
             // Calcular quantidade total de itens
             const quantidadeTotal = itens.reduce((sum, item) => sum + parseFloat(item.quantidade || 0), 0);
             document.getElementById('venda-quantidade-total').textContent = `${Math.round(quantidadeTotal)} UN`;
+            
+            // ✅ Buscar preço de custo real das movimentações de ENTRADA (COMPRA)
+            const itensComPrecoCompra = await Promise.all(itens.map(async (item) => {
+                let precoCompra = parseFloat(item.produto?.preco_compra || 0);
+                
+                try {
+                    // Buscar a última movimentação de ENTRADA deste produto/sabor
+                    let query = supabase
+                        .from('estoque_movimentacoes')
+                        .select(`
+                            *,
+                            pedido:pedidos(id, tipo_pedido)
+                        `)
+                        .eq('produto_id', item.produto_id)
+                        .eq('tipo', 'ENTRADA')
+                        .not('pedido_id', 'is', null)
+                        .order('created_at', { ascending: false })
+                        .limit(10);
+                    
+                    // Filtrar por sabor se existir
+                    if (item.sabor_id) {
+                        query = query.eq('sabor_id', item.sabor_id);
+                    }
+                    
+                    const { data: movimentacoes, error: movError } = await query;
+                    
+                    if (!movError && movimentacoes && movimentacoes.length > 0) {
+                        // Buscar a primeira movimentação de um pedido de COMPRA
+                        const movCompra = movimentacoes.find(m => m.pedido?.tipo_pedido === 'COMPRA');
+                        
+                        if (movCompra && movCompra.pedido_id) {
+                            // Buscar o preco_unitario do pedido_itens
+                            const { data: itemCompra, error: itemError } = await supabase
+                                .from('pedido_itens')
+                                .select('preco_unitario')
+                                .eq('pedido_id', movCompra.pedido_id)
+                                .eq('produto_id', item.produto_id)
+                                .maybeSingle();
+                            
+                            if (!itemError && itemCompra?.preco_unitario) {
+                                precoCompra = parseFloat(itemCompra.preco_unitario);
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.warn('Erro ao buscar preço de compra:', err);
+                }
+                
+                return { ...item, precoCompraReal: precoCompra };
+            }));
+            
+            // Calcular margem de lucro com preços reais
+            let custoTotal = 0;
+            let vendaTotal = 0;
+            
+            itensComPrecoCompra.forEach(item => {
+                const quantidade = parseFloat(item.quantidade || 0);
+                const precoVenda = parseFloat(item.preco_unitario || 0);
+                const precoCompra = item.precoCompraReal;
+                
+                custoTotal += quantidade * precoCompra;
+                vendaTotal += quantidade * precoVenda;
+            });
+            
+            const margemLucro = vendaTotal - custoTotal;
+            const margemPercentual = custoTotal > 0 ? (margemLucro / custoTotal * 100) : 0;
+            
+            document.getElementById('venda-custo-total').textContent = formatCurrency(custoTotal);
+            document.getElementById('venda-margem-lucro').textContent = formatCurrency(margemLucro);
+            document.getElementById('venda-margem-percentual').textContent = `${margemPercentual.toFixed(1)}%`;
             
             // Buscar estoque atual para cada item
             const itensComEstoque = await Promise.all(itens.map(async (item) => {
