@@ -409,7 +409,25 @@ async function finalizarPedido(pedidoId) {
             throw error;
         }
 
-        showToast('Pedido finalizado e estoque atualizado!', 'success');
+        // Buscar o pedido para saber o tipo
+        const pedido = await getPedido(pedidoId);
+        // Só atualizar preço de compra se for pedido de COMPRA
+        if (pedido && pedido.tipo_pedido === 'COMPRA') {
+            const itens = await getItensPedido(pedidoId);
+            for (const item of itens) {
+                // Garantir que produto_id está presente
+                const produtoId = item.produto_id || item.produto?.id;
+                if (produtoId && item.preco_unitario > 0) {
+                    console.log('[UPDATE PRODUTO] produtoId:', produtoId, 'preco_compra:', item.preco_unitario, item);
+                    await updateProduto(produtoId, {
+                        preco_compra: item.preco_unitario
+                    });
+                } else {
+                    console.warn('[NÃO ATUALIZADO] produtoId:', produtoId, 'preco_unitario:', item.preco_unitario, item);
+                }
+            }
+        }
+        showToast('Pedido finalizado, estoque e preços atualizados!', 'success');
         return true;
         
     } catch (error) {
