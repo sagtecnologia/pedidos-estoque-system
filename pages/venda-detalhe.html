@@ -1184,9 +1184,14 @@
                 botoes.push('<button onclick="excluirVenda()" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700">🗑️ Excluir Venda</button>');
             } else {
                 document.getElementById('btn-add-item').style.display = 'none';
+                // Mostrar botão de alteração em lote também para vendas FINALIZADAS
                 const btnAlterarPrecoLote = document.getElementById('btn-alterar-preco-lote');
                 if (btnAlterarPrecoLote) {
-                    btnAlterarPrecoLote.style.display = 'none';
+                    if (venda.status === 'FINALIZADO' && itens.length > 0) {
+                        btnAlterarPrecoLote.style.display = 'block';
+                    } else {
+                        btnAlterarPrecoLote.style.display = 'none';
+                    }
                 }
             }
             

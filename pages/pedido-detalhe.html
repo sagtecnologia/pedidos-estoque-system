@@ -939,9 +939,12 @@
                     indicadorEdicaoPreco.classList.add('hidden');
                 }
                 btnAddItem.style.display = 'none';
+                
+                // Mostrar botão de alteração em lote se houver itens (igual ao padrão PENDENTE)
                 const btnAlterarPrecoLote = document.getElementById('btn-alterar-preco-lote');
                 if (btnAlterarPrecoLote) {
-                    btnAlterarPrecoLote.style.display = 'none';
+                    const itens = await getItensPedido(pedidoId);
+                    btnAlterarPrecoLote.style.display = itens.length > 0 ? 'block' : 'none';
                 }
             } else {
                 btnAddItem.style.display = 'none';
