@@ -82,6 +82,18 @@
                                 <dt class="text-gray-600 text-sm">Quantidade Total:</dt>
                                 <dd id="venda-quantidade-total" class="font-medium text-gray-700">0 UN</dd>
                             </div>
+                            <div class="flex justify-between pt-2 border-t">
+                                <dt class="text-gray-600 text-sm">Custo Total:</dt>
+                                <dd id="venda-custo-total" class="font-medium text-gray-700">R$ 0,00</dd>
+                            </div>
+                            <div class="flex justify-between pt-2 border-t">
+                                <dt class="text-gray-600 text-sm">Margem de Lucro:</dt>
+                                <dd id="venda-margem-lucro" class="font-medium text-purple-600">R$ 0,00</dd>
+                            </div>
+                            <div class="flex justify-between">
+                                <dt class="text-gray-600 text-xs">Percentual:</dt>
+                                <dd id="venda-margem-percentual" class="text-sm font-semibold text-purple-600">0%</dd>
+                            </div>
                             <div id="pagamento-info" class="hidden pt-3 border-t space-y-2">
                                 <div class="flex justify-between text-sm">
                                     <dt class="text-gray-600">Valor Pago:</dt>
@@ -1049,6 +1061,76 @@
             const quantidadeTotal = itens.reduce((sum, item) => sum + parseFloat(item.quantidade || 0), 0);
             document.getElementById('venda-quantidade-total').textContent = `${Math.round(quantidadeTotal)} UN`;
             
+            // ✅ Buscar preço de custo real das movimentações de ENTRADA (COMPRA)
+            const itensComPrecoCompra = await Promise.all(itens.map(async (item) => {
+                let precoCompra = parseFloat(item.produto?.preco_compra || 0);
+                
+                try {
+                    // Buscar a última movimentação de ENTRADA deste produto/sabor
+                    let query = supabase
+                        .from('estoque_movimentacoes')
+                        .select(`
+                            *,
+                            pedido:pedidos(id, tipo_pedido)
+                        `)
+                        .eq('produto_id', item.produto_id)
+                        .eq('tipo', 'ENTRADA')
+                        .not('pedido_id', 'is', null)
+                        .order('created_at', { ascending: false })
+                        .limit(10);
+                    
+                    // Filtrar por sabor se existir
+                    if (item.sabor_id) {
+                        query = query.eq('sabor_id', item.sabor_id);
+                    }
+                    
+                    const { data: movimentacoes, error: movError } = await query;
+                    
+                    if (!movError && movimentacoes && movimentacoes.length > 0) {
+                        // Buscar a primeira movimentação de um pedido de COMPRA
+                        const movCompra = movimentacoes.find(m => m.pedido?.tipo_pedido === 'COMPRA');
+                        
+                        if (movCompra && movCompra.pedido_id) {
+                            // Buscar o preco_unitario do pedido_itens
+                            const { data: itemCompra, error: itemError } = await supabase
+                                .from('pedido_itens')
+                                .select('preco_unitario')
+                                .eq('pedido_id', movCompra.pedido_id)
+                                .eq('produto_id', item.produto_id)
+                                .maybeSingle();
+                            
+                            if (!itemError && itemCompra?.preco_unitario) {
+                                precoCompra = parseFloat(itemCompra.preco_unitario);
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.warn('Erro ao buscar preço de compra:', err);
+                }
+                
+                return { ...item, precoCompraReal: precoCompra };
+            }));
+            
+            // Calcular margem de lucro com preços reais
+            let custoTotal = 0;
+            let vendaTotal = 0;
+            
+            itensComPrecoCompra.forEach(item => {
+                const quantidade = parseFloat(item.quantidade || 0);
+                const precoVenda = parseFloat(item.preco_unitario || 0);
+                const precoCompra = item.precoCompraReal;
+                
+                custoTotal += quantidade * precoCompra;
+                vendaTotal += quantidade * precoVenda;
+            });
+            
+            const margemLucro = vendaTotal - custoTotal;
+            const margemPercentual = custoTotal > 0 ? (margemLucro / custoTotal * 100) : 0;
+            
+            document.getElementById('venda-custo-total').textContent = formatCurrency(custoTotal);
+            document.getElementById('venda-margem-lucro').textContent = formatCurrency(margemLucro);
+            document.getElementById('venda-margem-percentual').textContent = `${margemPercentual.toFixed(1)}%`;
+            
             // Buscar estoque atual para cada item
             const itensComEstoque = await Promise.all(itens.map(async (item) => {
                 let estoqueAtual = 0;
@@ -1595,98 +1677,73 @@
             
             showLoading(true);
             try {
-                // ✅ LÓGICA CORRIGIDA PARA REABERTURA
-                //
-                // CANCELAMENTO DEFINITIVO (CANCELADO):
-                // - Devolver produtos ao estoque (ENTRADA)
-                // - Registrar movimentação de devolução
-                //
-                // REABERTURA COMO RASCUNHO:
-                // - NÃO mexer no estoque (já está correto)
-                // - Apenas mudar status
-                // - Ao refinalizar, o sistema vai calcular diferença
+                // ✅ USAR FUNÇÃO SQL COM PROTEÇÕES COMPLETAS
+                // A função cancelar_pedido_definitivo e reabrir_pedido_para_rascunho têm:
+                // - Validação de estoque ANTES de qualquer mudança
+                // - Locks de transação (FOR UPDATE)
+                // - Atomicidade garantida (tudo ou nada)
                 
                 if (venda.status === 'FINALIZADO' && novoStatus === 'CANCELADO') {
-                    // ❌ CANCELAMENTO DEFINITIVO: Devolver ao estoque
-                    console.log('❌ Cancelamento definitivo - devolvendo produtos ao estoque');
+                    // ❌ CANCELAMENTO DEFINITIVO: Usar função SQL protegida
+                    console.log('❌ Cancelamento definitivo usando função SQL');
                     
-                    const itensVenda = await getItensPedido(vendaId);
+                    const { data, error } = await supabase.rpc('cancelar_pedido_definitivo', {
+                        p_pedido_id: vendaId,
+                        p_usuario_id: currentUser.id
+                    });
                     
-                    for (const item of itensVenda) {
-                        if (item.sabor_id) {
-                            // Devolver ao estoque usando RPC
-                            const { error: estoqueError } = await supabase.rpc('atualizar_estoque_sabor', {
-                                p_sabor_id: item.sabor_id,
-                                p_quantidade: item.quantidade // POSITIVO para adicionar de volta
-                            });
-                            
-                            if (estoqueError) {
-                                console.error('Erro ao devolver ao estoque:', estoqueError);
-                                throw estoqueError;
-                            }
-                            
-                            // Registrar movimentação
-                            const { data: saborAtual } = await supabase
-                                .from('produto_sabores')
-                                .select('quantidade')
-                                .eq('id', item.sabor_id)
-                                .single();
-                            
-                            await supabase
-                                .from('estoque_movimentacoes')
-                                .insert({
-                                    produto_id: item.produto_id,
-                                    sabor_id: item.sabor_id,
-                                    tipo: 'ENTRADA',
-                                    quantidade: item.quantidade,
-                                    estoque_anterior: saborAtual.quantidade - item.quantidade,
-                                    estoque_novo: saborAtual.quantidade,
-                                    usuario_id: currentUser.id,
-                                    pedido_id: vendaId,
-                                    observacao: 'Devolução - Cancelamento definitivo de venda'
-                                });
+                    if (error) {
+                        console.error('❌ Erro ao cancelar venda:', error);
+                        
+                        // Mensagem amigável para erro de estoque
+                        if (error.message.includes('BLOQUEIO') || error.message.includes('Estoque')) {
+                            throw new Error(
+                                `❌ ${error.message}\n\n` +
+                                `O cancelamento foi BLOQUEADO para proteger a integridade do estoque.\n` +
+                                `Nenhuma alteração foi realizada no sistema.`
+                            );
                         }
+                        
+                        throw error;
                     }
+                    
+                    console.log('✅ Venda cancelada com sucesso via função SQL');
+                    
                 } else if (venda.status === 'FINALIZADO' && novoStatus === 'RASCUNHO') {
-                    // 🔄 REABERTURA COMO RASCUNHO: NÃO mexer no estoque
-                    console.log('🔄 Reabrindo venda como RASCUNHO (SEM mexer no estoque)');
-                    console.log('   → Estoque permanece intacto');
-                    console.log('   → Ao refinalizar, o sistema vai recalcular');
-                }
-                
-                const updateData = { status: novoStatus };
-                
-                // Se for cancelamento definitivo, registrar quem cancelou
-                if (novoStatus === 'CANCELADO') {
-                    updateData.aprovador_id = currentUser.id;
-                } else if (novoStatus === 'RASCUNHO') {
-                    updateData.data_finalizacao = null; // Limpar data de finalização
-                }
-                
-                console.log('📝 Atualizando venda:', vendaId, 'Status atual:', venda.status, 'Novo status:', novoStatus);
-                console.log('📝 Dados para atualizar:', updateData);
-                
-                const { data, error } = await supabase
-                    .from('pedidos')
-                    .update(updateData)
-                    .eq('id', vendaId)
-                    .select();
-                
-                if (error) {
-                    // Tratamento específico para erros de cancelamento
-                    if (error.message && error.message.includes('BLOQUEIO')) {
-                        console.error('❌ CANCELAMENTO BLOQUEADO:', error);
-                        throw new Error('BLOQUEIO: ' + error.message);
+                    // 🔄 REABERTURA COMO RASCUNHO: Usar função SQL que reverte estoque
+                    console.log('🔄 Reabrindo venda como RASCUNHO usando função SQL');
+                    
+                    const { data, error } = await supabase.rpc('reabrir_pedido_para_rascunho', {
+                        p_pedido_id: vendaId,
+                        p_usuario_id: currentUser.id
+                    });
+                    
+                    if (error) {
+                        console.error('❌ Erro ao reabrir venda:', error);
+                        throw error;
                     }
-                    if (error.message && error.message.includes('RESTRIÇÃO')) {
-                        console.error('❌ RESTRIÇÃO DE CANCELAMENTO:', error);
-                        throw new Error(error.message);
+                    
+                    console.log('✅ Venda reaberta como RASCUNHO. Estoque revertido.');
+                    
+                } else {
+                    // Outros casos (ex: APROVADO → RASCUNHO sem mexer em estoque)
+                    const updateData = { status: novoStatus };
+                    
+                    if (novoStatus === 'CANCELADO') {
+                        updateData.aprovador_id = currentUser.id;
+                    } else if (novoStatus === 'RASCUNHO') {
+                        updateData.data_finalizacao = null;
                     }
-                    console.error('❌ Erro ao atualizar status:', error);
-                    throw error;
+                    
+                    const { error } = await supabase
+                        .from('pedidos')
+                        .update(updateData)
+                        .eq('id', vendaId);
+                    
+                    if (error) throw error;
                 }
                 
-                console.log('✅ Venda atualizada com sucesso:', data);
+                console.log('✅ Venda atualizada com sucesso');
                 
                 const msgSucesso = novoStatus === 'CANCELADO' 
                     ? '✅ Venda cancelada definitivamente! Os itens foram devolvidos ao estoque com sucesso.' 

@@ -272,12 +272,12 @@
         </div>
     </main>
 
-    <!-- Modal: Alterar Sabor -->
+    <!-- Modal: Alterar/Dividir Sabor -->
     <div id="modal-alterar-sabor" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
             <div class="bg-gradient-to-r from-orange-500 to-orange-600 px-6 py-4 rounded-t-lg">
                 <h2 class="text-xl font-bold text-white">
-                    <i class="fas fa-edit mr-2"></i>Alterar Sabor do Produto
+                    <i class="fas fa-edit mr-2"></i>Gerenciar Sabor do Produto
                 </h2>
             </div>
 
@@ -292,29 +292,91 @@
                         <p id="modal-produto" class="text-lg font-semibold text-gray-900">-</p>
                         
                         <p class="text-sm text-gray-600 mt-3">Sabor Atual</p>
-                        <p id="modal-sabor-atual" class="text-lg font-semibold text-orange-600">-</p>
+                        <p id="modal-sabor-atual" class="text-sm font-semibold text-orange-600">-</p>
+                        
+                        <p class="text-sm text-gray-600 mt-3">Quantidade Disponível</p>
+                        <p id="modal-quantidade-disponivel" class="text-lg font-semibold text-green-600">-</p>
                     </div>
 
-                    <!-- Novo sabor -->
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Novo Sabor</label>
-                        <input 
-                            id="modal-novo-sabor" 
-                            type="text" 
-                            placeholder="Digite o novo sabor" 
-                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    <!-- Abas de operação -->
+                    <div class="flex gap-2 border-b border-gray-200">
+                        <button 
+                            id="tab-alterar" 
+                            onclick="mudarTabGerenciarSabor('alterar')"
+                            class="flex-1 px-3 py-2 text-sm font-medium text-orange-600 border-b-2 border-orange-600 transition"
                         >
-                        <p class="text-xs text-gray-500 mt-1">Ou selecione um existente abaixo:</p>
-                        <select 
-                            id="modal-sabores-existentes" 
-                            class="w-full px-4 py-2 border border-gray-300 rounded-lg mt-2 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-                            onchange="document.getElementById('modal-novo-sabor').value = this.value"
+                            <i class="fas fa-exchange-alt mr-1"></i>Alterar Sabor
+                        </button>
+                        <button 
+                            id="tab-dividir" 
+                            onclick="mudarTabGerenciarSabor('dividir')"
+                            class="flex-1 px-3 py-2 text-sm font-medium text-gray-600 border-b-2 border-transparent hover:text-gray-900 transition"
                         >
-                            <option value="">-- Selecione --</option>
-                        </select>
+                            <i class="fas fa-cut mr-1"></i>Dividir Quantidade
+                        </button>
                     </div>
 
-                    <!-- Observação -->
+                    <!-- Conteúdo Alterar Sabor -->
+                    <div id="conteudo-alterar" class="space-y-4">
+                        <!-- Novo sabor -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Novo Sabor</label>
+                            <input 
+                                id="modal-novo-sabor" 
+                                type="text" 
+                                placeholder="Digite o novo sabor" 
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                            >
+                            <p class="text-xs text-gray-500 mt-1">Ou selecione um existente:</p>
+                            <select 
+                                id="modal-sabores-existentes" 
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg mt-2 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                                onchange="document.getElementById('modal-novo-sabor').value = this.value"
+                            >
+                                <option value="">-- Selecione --</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Conteúdo Dividir Quantidade -->
+                    <div id="conteudo-dividir" class="hidden space-y-4">
+                        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                            <p class="text-xs text-yellow-800"><i class="fas fa-info-circle mr-2"></i>(Ex: 3 morangos → 2 para novo sabor, 1 para morango)</p>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Quantidade para Novo Sabor</label>
+                            <input 
+                                id="modal-quantidade-dividir" 
+                                type="number" 
+                                min="1" 
+                                step="1"
+                                placeholder="Ex: 2" 
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                            >
+                            <p id="modal-quantidade-validacao" class="text-xs text-gray-500 mt-1"></p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Nome do Novo Sabor</label>
+                            <input 
+                                id="modal-novo-sabor-dividir" 
+                                type="text" 
+                                placeholder="Digite o nome do novo sabor" 
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                            >
+                            <p class="text-xs text-gray-500 mt-1">Ou selecione um existente:</p>
+                            <select 
+                                id="modal-sabores-existentes-dividir" 
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg mt-2 focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                                onchange="document.getElementById('modal-novo-sabor-dividir').value = this.value"
+                            >
+                                <option value="">-- Selecione --</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Observação (ambas abas) -->
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">Observação</label>
                         <textarea 
@@ -335,6 +397,7 @@
                     Cancelar
                 </button>
                 <button 
+                    id="btn-confirmar-modal-sabor"
                     onclick="confirmarAlteracaoSabor()" 
                     class="px-4 py-2 text-white bg-orange-600 rounded-lg hover:bg-orange-700 transition"
                 >
@@ -1340,14 +1403,51 @@
         }
 
         // ========================================
-        // FUNÇÕES PARA ALTERAR SABOR
+        // FUNÇÕES PARA GERENCIAR SABOR
         // ========================================
 
         let saborSelecionadoAtual = {
             id: null,
             sabor: null,
-            produto_id: null
+            produto_id: null,
+            quantidade: null
         };
+
+        let abaSaborAtiva = 'alterar'; // 'alterar' ou 'dividir'
+
+        function mudarTabGerenciarSabor(aba) {
+            abaSaborAtiva = aba;
+            
+            // Atualizar botões
+            const tabAlterar = document.getElementById('tab-alterar');
+            const tabDividir = document.getElementById('tab-dividir');
+            const btnConfirmar = document.getElementById('btn-confirmar-modal-sabor');
+            
+            if (aba === 'alterar') {
+                tabAlterar.classList.remove('text-gray-600', 'border-transparent');
+                tabAlterar.classList.add('text-orange-600', 'border-orange-600');
+                tabDividir.classList.remove('text-orange-600', 'border-orange-600');
+                tabDividir.classList.add('text-gray-600', 'border-transparent');
+                
+                document.getElementById('conteudo-alterar').classList.remove('hidden');
+                document.getElementById('conteudo-dividir').classList.add('hidden');
+                btnConfirmar.innerHTML = '<i class="fas fa-check mr-2"></i>Confirmar Alteração';
+            } else {
+                tabAlterar.classList.remove('text-orange-600', 'border-orange-600');
+                tabAlterar.classList.add('text-gray-600', 'border-transparent');
+                tabDividir.classList.remove('text-gray-600', 'border-transparent');
+                tabDividir.classList.add('text-orange-600', 'border-orange-600');
+                
+                document.getElementById('conteudo-alterar').classList.add('hidden');
+                document.getElementById('conteudo-dividir').classList.remove('hidden');
+                btnConfirmar.innerHTML = '<i class="fas fa-cut mr-2"></i>Confirmar Divisão';
+            }
+            
+            // Limpar valores ao mudar aba
+            document.getElementById('modal-novo-sabor').value = '';
+            document.getElementById('modal-novo-sabor-dividir').value = '';
+            document.getElementById('modal-quantidade-dividir').value = '';
+        }
 
         function abrirModalAlterarSabor(saborId, saborAtual, produtoId) {
             // Buscar informações do sabor
@@ -1368,26 +1468,59 @@
             saborSelecionadoAtual = {
                 id: saborId,
                 sabor: saborAtual,
-                produto_id: produtoId
+                produto_id: produtoId,
+                quantidade: sabor.quantidade
             };
 
             // Preencher modal
             document.getElementById('modal-marca').textContent = produto.marca || '-';
             document.getElementById('modal-produto').textContent = produto.nome;
             document.getElementById('modal-sabor-atual').textContent = saborAtual;
+            document.getElementById('modal-quantidade-disponivel').textContent = sabor.quantidade + ' ' + (produto.unidade || 'un');
             document.getElementById('modal-novo-sabor').value = '';
+            document.getElementById('modal-novo-sabor-dividir').value = '';
+            document.getElementById('modal-quantidade-dividir').value = '';
             document.getElementById('modal-observacao').value = '';
 
             // Carregar sabores existentes do produto
             const selectSabores = document.getElementById('modal-sabores-existentes');
+            const selectSaboresDividir = document.getElementById('modal-sabores-existentes-dividir');
             selectSabores.innerHTML = '<option value="">-- Selecione --</option>';
+            selectSaboresDividir.innerHTML = '<option value="">-- Selecione --</option>';
             
             const saboresDoProducto = todosSabores.filter(s => s.produto_id === produtoId && s.sabor !== saborAtual);
             saboresDoProducto.forEach(s => {
                 const option = document.createElement('option');
+                const option2 = document.createElement('option');
                 option.value = s.sabor;
                 option.textContent = s.sabor;
+                option2.value = s.sabor;
+                option2.textContent = s.sabor + ` (${s.quantidade} ${produto.unidade})`;
                 selectSabores.appendChild(option);
+                selectSaboresDividir.appendChild(option2);
+            });
+
+            // Resetar para aba "Alterar"
+            abaSaborAtiva = 'alterar';
+            mudarTabGerenciarSabor('alterar');
+
+            // Adicionar evento para validação de quantidade
+            document.getElementById('modal-quantidade-dividir').addEventListener('input', function() {
+                const quantidade = parseFloat(this.value) || 0;
+                const validacao = document.getElementById('modal-quantidade-validacao');
+                
+                if (quantidade > 0 && quantidade < saborSelecionadoAtual.quantidade) {
+                    const restante = saborSelecionadoAtual.quantidade - quantidade;
+                    validacao.textContent = `✓ ${saborSelecionadoAtual.sabor}: ${restante} ${produto.unidade}`;
+                    validacao.className = 'text-xs text-green-600 mt-1';
+                } else if (quantidade >= saborSelecionadoAtual.quantidade) {
+                    validacao.textContent = '⚠️ Quantidade deve ser menor que ' + saborSelecionadoAtual.quantidade;
+                    validacao.className = 'text-xs text-red-600 mt-1';
+                } else if (quantidade > 0) {
+                    validacao.textContent = '';
+                } else {
+                    validacao.textContent = '';
+                }
             });
 
             // Abrir modal
@@ -1396,10 +1529,24 @@
 
         function fecharModalAlterarSabor() {
             document.getElementById('modal-alterar-sabor').classList.add('hidden');
-            saborSelecionadoAtual = { id: null, sabor: null, produto_id: null };
+            saborSelecionadoAtual = { id: null, sabor: null, produto_id: null, quantidade: null };
+            abaSaborAtiva = 'alterar';
         }
 
         async function confirmarAlteracaoSabor() {
+            try {
+                if (abaSaborAtiva === 'alterar') {
+                    await confirmarAlteracaoSaborAba();
+                } else {
+                    await confirmarDividirSaborAba();
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                showToast('Erro ao processar: ' + error.message, 'error');
+            }
+        }
+
+        async function confirmarAlteracaoSaborAba() {
             const novoSabor = document.getElementById('modal-novo-sabor').value.trim();
             const observacao = document.getElementById('modal-observacao').value.trim();
 
@@ -1431,7 +1578,7 @@
                     return;
                 }
 
-                showToast(`Sabor alterado com sucesso de "${saborSelecionadoAtual.sabor}" para "${novoSabor}"!`, 'success');
+                showToast(`✓ Sabor alterado de "${saborSelecionadoAtual.sabor}" para "${novoSabor}"!`, 'success');
                 fecharModalAlterarSabor();
 
                 // Recarregar dados
@@ -1441,6 +1588,67 @@
             } catch (error) {
                 console.error('Erro ao alterar sabor:', error);
                 showToast('Erro ao alterar sabor: ' + error.message, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function confirmarDividirSaborAba() {
+            const quantidadeDividir = parseFloat(document.getElementById('modal-quantidade-dividir').value);
+            const novoSabor = document.getElementById('modal-novo-sabor-dividir').value.trim();
+            const observacao = document.getElementById('modal-observacao').value.trim();
+
+            // Validações
+            if (!quantidadeDividir || quantidadeDividir <= 0) {
+                showToast('Por favor, digite uma quantidade válida', 'warning');
+                return;
+            }
+
+            if (quantidadeDividir >= saborSelecionadoAtual.quantidade) {
+                showToast(`A quantidade deve ser menor que ${saborSelecionadoAtual.quantidade}`, 'warning');
+                return;
+            }
+
+            if (!novoSabor) {
+                showToast('Por favor, digite ou selecione o novo sabor', 'warning');
+                return;
+            }
+
+            if (novoSabor.toLowerCase() === saborSelecionadoAtual.sabor.toLowerCase()) {
+                showToast('O novo sabor deve ser diferente do sabor atual', 'warning');
+                return;
+            }
+
+            try {
+                showLoading(true);
+
+                // Chamar função do banco para dividir sabor
+                const { data, error } = await supabase
+                    .rpc('dividir_sabor_quantidade', {
+                        p_sabor_id: saborSelecionadoAtual.id,
+                        p_quantidade_dividir: quantidadeDividir,
+                        p_novo_sabor: novoSabor,
+                        p_produto_id: saborSelecionadoAtual.produto_id,
+                        p_observacao: observacao
+                    });
+
+                if (error) {
+                    console.error('Erro ao dividir sabor:', error);
+                    showToast('Erro ao dividir sabor: ' + error.message, 'error');
+                    return;
+                }
+
+                const restante = saborSelecionadoAtual.quantidade - quantidadeDividir;
+                showToast(`✓ Sabor dividido! "${saborSelecionadoAtual.sabor}": ${restante} | "${novoSabor}": ${quantidadeDividir}`, 'success');
+                fecharModalAlterarSabor();
+
+                // Recarregar dados
+                await carregarDados();
+                renderizarTabAtiva();
+
+            } catch (error) {
+                console.error('Erro ao dividir sabor:', error);
+                showToast('Erro ao dividir sabor: ' + error.message, 'error');
             } finally {
                 showLoading(false);
             }
