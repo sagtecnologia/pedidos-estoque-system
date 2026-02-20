@@ -190,22 +190,43 @@
         </div>
     </div>
 
-    <!-- Modal Sucesso -->
+    <!-- Modal Sucesso com Prévia -->
     <div id="modal-sucesso" class="modal-backdrop hidden">
-        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-8 text-center">
-            <div class="text-6xl mb-4">✅</div>
-            <h3 class="text-2xl font-bold text-gray-900 mb-4">Pedido Enviado com Sucesso!</h3>
-            <p class="text-gray-600 mb-6">
-                Seu pedido foi recebido e será analisado em breve.
-            </p>
-            <div class="bg-blue-50 p-4 rounded-lg mb-6">
-                <p class="text-sm font-medium text-gray-700 mb-2">Número do Pedido:</p>
-                <p id="numero-pedido-sucesso" class="text-2xl font-bold text-blue-600 mb-3"></p>
-                <p class="text-xs text-gray-500">Guarde este número para acompanhamento</p>
+        <div class="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center px-6 py-4 border-b bg-green-50">
+                <h3 class="text-xl font-bold text-green-800">✅ Pedido Enviado com Sucesso!</h3>
+                <button onclick="location.reload()" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
             </div>
-            <button onclick="location.reload()" class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-bold">
-                Fazer Novo Pedido
-            </button>
+            <div class="px-6 py-4">
+                <p class="text-gray-600 mb-4 text-center">Seu pedido foi recebido e será analisado em breve.</p>
+                
+                <!-- Prévia do Pedido -->
+                <div id="previa-pedido-container" class="border-2 border-dashed border-gray-300 rounded-lg p-5 mb-4 bg-white">
+                    <div id="previa-pedido-conteudo">
+                        <!-- Conteúdo preenchido via JS -->
+                    </div>
+                </div>
+
+                <!-- Botões de ação -->
+                <div class="flex flex-col space-y-3 mb-4">
+                    <button onclick="copiarPreviaPedido()" class="w-full flex items-center justify-center space-x-2 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-bold transition">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"></path></svg>
+                        <span>📋 Copiar Pedido</span>
+                    </button>
+                    <button onclick="salvarPreviaPedido()" class="w-full flex items-center justify-center space-x-2 bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 font-bold transition">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                        <span>💾 Salvar como Imagem</span>
+                    </button>
+                </div>
+
+                <button onclick="location.reload()" class="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 font-bold transition">
+                    🛒 Fazer Novo Pedido
+                </button>
+            </div>
         </div>
     </div>
 
@@ -540,9 +561,10 @@
                         <p class="font-medium">${saborComIcones}</p>
                         <p class="text-sm text-gray-600">${formatCurrency(sabor.preco_venda)} | Estoque: ${sabor.quantidade}</p>
                     </div>
-                    <div>
-                        <label class="text-xs text-gray-500">Quantidade</label>
-                        <input type="number" id="qtd-sabor-${sabor.id}" data-sabor-id="${sabor.id}" data-produto-id="${produtoId}" data-estoque="${sabor.quantidade}" min="0" max="${sabor.quantidade}" value="0" class="w-20 px-2 py-2 border rounded-lg text-center" oninput="validarQuantidadeSabor(this)">
+                    <div class="flex items-center space-x-2">
+                        <button onclick="diminuirQtdSabor('qtd-sabor-${sabor.id}')" class="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-sm font-bold">−</button>
+                        <input type="number" id="qtd-sabor-${sabor.id}" data-sabor-id="${sabor.id}" data-produto-id="${produtoId}" data-estoque="${sabor.quantidade}" min="0" max="${sabor.quantidade}" value="0" class="w-12 px-1 py-1 border rounded text-center text-sm" oninput="validarQuantidadeSabor(this)">
+                        <button onclick="aumentarQtdSabor('qtd-sabor-${sabor.id}')" class="px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-sm font-bold">+</button>
                     </div>
                 </div>
             `;
@@ -605,6 +627,29 @@
             } else {
                 // Remover vermelho se valor for válido
                 input.classList.remove('border-red-500', 'border-2');
+            }
+        }
+
+        function aumentarQtdSabor(inputId) {
+            const input = document.getElementById(inputId);
+            const estoque = parseInt(input.dataset.estoque) || 0;
+            let valor = parseInt(input.value) || 0;
+            
+            if (valor < estoque) {
+                input.value = valor + 1;
+                validarQuantidadeSabor(input);
+            } else {
+                showToast(`⚠️ Máximo disponível: ${estoque} unidades`, 'warning');
+            }
+        }
+
+        function diminuirQtdSabor(inputId) {
+            const input = document.getElementById(inputId);
+            let valor = parseInt(input.value) || 0;
+            
+            if (valor > 0) {
+                input.value = valor - 1;
+                validarQuantidadeSabor(input);
             }
         }
 
@@ -1046,20 +1091,32 @@
         function criarModalSucesso() {
             const modalHTML = `
                 <div id="modal-sucesso" class="modal-backdrop hidden">
-                    <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-8 text-center">
-                        <div class="text-6xl mb-4">✅</div>
-                        <h3 class="text-2xl font-bold text-gray-900 mb-4">Pedido Enviado com Sucesso!</h3>
-                        <p class="text-gray-600 mb-6">
-                            Seu pedido foi recebido e será analisado em breve.
-                        </p>
-                        <div class="bg-blue-50 p-4 rounded-lg mb-6">
-                            <p class="text-sm font-medium text-gray-700 mb-2">Número do Pedido:</p>
-                            <p id="numero-pedido-sucesso" class="text-2xl font-bold text-blue-600 mb-3"></p>
-                            <p class="text-xs text-gray-500">Guarde este número para acompanhamento</p>
+                    <div class="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+                        <div class="flex justify-between items-center px-6 py-4 border-b bg-green-50">
+                            <h3 class="text-xl font-bold text-green-800">✅ Pedido Enviado com Sucesso!</h3>
+                            <button onclick="location.reload()" class="text-gray-400 hover:text-gray-600">
+                                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                </svg>
+                            </button>
                         </div>
-                        <button onclick="location.reload()" class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-bold">
-                            Fazer Novo Pedido
-                        </button>
+                        <div class="px-6 py-4">
+                            <p class="text-gray-600 mb-4 text-center">Seu pedido foi recebido e será analisado em breve.</p>
+                            <div id="previa-pedido-container" class="border-2 border-dashed border-gray-300 rounded-lg p-5 mb-4 bg-white">
+                                <div id="previa-pedido-conteudo"></div>
+                            </div>
+                            <div class="flex flex-col space-y-3 mb-4">
+                                <button onclick="copiarPreviaPedido()" class="w-full flex items-center justify-center space-x-2 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-bold transition">
+                                    <span>📋 Copiar Pedido</span>
+                                </button>
+                                <button onclick="salvarPreviaPedido()" class="w-full flex items-center justify-center space-x-2 bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 font-bold transition">
+                                    <span>💾 Salvar como Imagem</span>
+                                </button>
+                            </div>
+                            <button onclick="location.reload()" class="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 font-bold transition">
+                                🛒 Fazer Novo Pedido
+                            </button>
+                        </div>
                     </div>
                 </div>
             `;
@@ -1113,10 +1170,26 @@
                     modalSucesso = document.getElementById('modal-sucesso');
                 }
 
-                const numeroPedidoElement = document.getElementById('numero-pedido-sucesso');
-                if (numeroPedidoElement) {
-                    numeroPedidoElement.textContent = resultado.prePedido.numero;
-                }
+                // Montar dados da prévia antes de limpar o carrinho
+                const dadosPedido = {
+                    numero: resultado.prePedido.numero,
+                    data: new Date().toLocaleString('pt-BR'),
+                    nome: nome,
+                    email: email || null,
+                    telefone: telefone || null,
+                    observacoes: observacoes || null,
+                    itens: carrinho.map(item => ({
+                        nome: item.nome,
+                        sabor: item.sabor,
+                        quantidade: item.quantidade,
+                        preco_unitario: item.preco_unitario,
+                        subtotal: item.quantidade * item.preco_unitario
+                    })),
+                    total: carrinho.reduce((sum, item) => sum + (item.quantidade * item.preco_unitario), 0)
+                };
+
+                // Renderizar prévia do pedido
+                renderizarPreviaPedido(dadosPedido);
                 
                 if (modalSucesso) {
                     modalSucesso.classList.remove('hidden');
@@ -1151,6 +1224,212 @@
 
         function formatCurrency(value) {
             return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value || 0);
+        }
+
+        // ============ PRÉVIA DO PEDIDO ============
+
+        // Variável global para armazenar dados do último pedido
+        let ultimoPedidoDados = null;
+
+        function renderizarPreviaPedido(dados) {
+            ultimoPedidoDados = dados;
+            const container = document.getElementById('previa-pedido-conteudo');
+            if (!container) return;
+
+            const itensHTML = dados.itens.map(item => {
+                const saborTexto = item.sabor ? ` - ${item.sabor}` : '';
+                return `
+                    <div class="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
+                        <div class="flex-1">
+                            <p class="text-sm font-medium text-gray-800">${item.nome}${saborTexto}</p>
+                            <p class="text-xs text-gray-500">${item.quantidade}x ${formatCurrency(item.preco_unitario)}</p>
+                        </div>
+                        <p class="text-sm font-bold text-gray-900">${formatCurrency(item.subtotal)}</p>
+                    </div>
+                `;
+            }).join('');
+
+            container.innerHTML = `
+                <div class="text-center mb-4">
+                    <p class="text-2xl font-bold text-green-700">🧾 Comprovante do Pedido</p>
+                    <div class="w-16 h-1 bg-green-500 mx-auto mt-2 rounded"></div>
+                </div>
+
+                <div class="bg-blue-50 rounded-lg p-3 mb-4 text-center">
+                    <p class="text-xs text-gray-500 uppercase tracking-wide">Número do Pedido</p>
+                    <p class="text-2xl font-bold text-blue-700">${dados.numero}</p>
+                    <p class="text-xs text-gray-500 mt-1">${dados.data}</p>
+                </div>
+
+                <div class="mb-4">
+                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Dados do Cliente</p>
+                    <div class="bg-gray-50 rounded-lg p-3">
+                        <p class="text-sm"><span class="font-medium">👤 Nome:</span> ${dados.nome}</p>
+                        ${dados.telefone ? `<p class="text-sm mt-1"><span class="font-medium">📱 Telefone:</span> ${dados.telefone}</p>` : ''}
+                        ${dados.email ? `<p class="text-sm mt-1"><span class="font-medium">📧 Email:</span> ${dados.email}</p>` : ''}
+                    </div>
+                </div>
+
+                <div class="mb-4">
+                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Itens do Pedido</p>
+                    <div class="bg-gray-50 rounded-lg p-3">
+                        ${itensHTML}
+                    </div>
+                </div>
+
+                ${dados.observacoes ? `
+                <div class="mb-4">
+                    <p class="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Observações</p>
+                    <div class="bg-yellow-50 rounded-lg p-3">
+                        <p class="text-sm text-gray-700">💬 ${dados.observacoes}</p>
+                    </div>
+                </div>
+                ` : ''}
+
+                <div class="bg-green-50 rounded-lg p-4 text-center">
+                    <p class="text-xs text-gray-500 uppercase tracking-wide">Total do Pedido</p>
+                    <p class="text-3xl font-bold text-green-700">${formatCurrency(dados.total)}</p>
+                </div>
+
+                <div class="mt-4 pt-3 border-t border-gray-200 text-center">
+                    <p class="text-xs text-gray-400">Status: Aguardando Aprovação</p>
+                    <p class="text-xs text-gray-400">Guarde o número do pedido para acompanhamento</p>
+                </div>
+            `;
+        }
+
+        function copiarPreviaPedido() {
+            if (!ultimoPedidoDados) {
+                showToast('Nenhum pedido para copiar', 'error');
+                return;
+            }
+
+            const dados = ultimoPedidoDados;
+            let texto = '🧾 COMPROVANTE DO PEDIDO\n';
+            texto += '═══════════════════════════\n\n';
+            texto += `📌 Pedido Nº: ${dados.numero}\n`;
+            texto += `📅 Data: ${dados.data}\n\n`;
+            texto += '👤 DADOS DO CLIENTE\n';
+            texto += `Nome: ${dados.nome}\n`;
+            if (dados.telefone) texto += `Telefone: ${dados.telefone}\n`;
+            if (dados.email) texto += `Email: ${dados.email}\n`;
+            texto += '\n📦 ITENS DO PEDIDO\n';
+            texto += '───────────────────────────\n';
+            
+            dados.itens.forEach(item => {
+                const saborTexto = item.sabor ? ` - ${item.sabor}` : '';
+                texto += `• ${item.nome}${saborTexto}\n`;
+                texto += `  ${item.quantidade}x ${formatCurrency(item.preco_unitario)} = ${formatCurrency(item.subtotal)}\n`;
+            });
+            
+            texto += '───────────────────────────\n';
+            texto += `💰 TOTAL: ${formatCurrency(dados.total)}\n\n`;
+            
+            if (dados.observacoes) {
+                texto += `💬 Obs: ${dados.observacoes}\n\n`;
+            }
+            
+            texto += 'Status: Aguardando Aprovação\n';
+            texto += '═══════════════════════════';
+
+            navigator.clipboard.writeText(texto).then(() => {
+                showToast('✅ Pedido copiado para a área de transferência!', 'success');
+            }).catch(() => {
+                // Fallback para navegadores que não suportam clipboard API
+                const textarea = document.createElement('textarea');
+                textarea.value = texto;
+                textarea.style.position = 'fixed';
+                textarea.style.left = '-9999px';
+                document.body.appendChild(textarea);
+                textarea.select();
+                try {
+                    document.execCommand('copy');
+                    showToast('✅ Pedido copiado para a área de transferência!', 'success');
+                } catch(e) {
+                    showToast('❌ Não foi possível copiar. Tente manualmente.', 'error');
+                }
+                document.body.removeChild(textarea);
+            });
+        }
+
+        function salvarPreviaPedido() {
+            const container = document.getElementById('previa-pedido-container');
+            if (!container) {
+                showToast('Erro: prévia não encontrada', 'error');
+                return;
+            }
+
+            // Usar html2canvas se disponível, senão fallback para impressão
+            if (typeof html2canvas !== 'undefined') {
+                salvarComoImagem(container);
+            } else {
+                // Carregar html2canvas dinamicamente
+                const script = document.createElement('script');
+                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
+                script.onload = () => salvarComoImagem(container);
+                script.onerror = () => {
+                    // Fallback: abrir janela de impressão
+                    salvarComoImpressao();
+                };
+                document.head.appendChild(script);
+            }
+        }
+
+        function salvarComoImagem(container) {
+            showToast('📸 Gerando imagem...', 'info');
+            
+            html2canvas(container, {
+                scale: 2,
+                backgroundColor: '#ffffff',
+                useCORS: true,
+                logging: false
+            }).then(canvas => {
+                const link = document.createElement('a');
+                link.download = `pedido_${ultimoPedidoDados?.numero || 'comprovante'}.png`;
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+                showToast('✅ Imagem salva com sucesso!', 'success');
+            }).catch(err => {
+                console.error('Erro ao gerar imagem:', err);
+                // Fallback para impressão
+                salvarComoImpressao();
+            });
+        }
+
+        function salvarComoImpressao() {
+            const container = document.getElementById('previa-pedido-conteudo');
+            if (!container) return;
+
+            const janela = window.open('', '_blank', 'width=400,height=600');
+            janela.document.write(`
+                <html>
+                <head>
+                    <title>Pedido ${ultimoPedidoDados?.numero || ''}</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; padding: 20px; max-width: 400px; margin: 0 auto; }
+                        .titulo { text-align: center; font-size: 20px; font-weight: bold; color: #15803d; margin-bottom: 15px; }
+                        .numero-pedido { text-align: center; background: #eff6ff; padding: 12px; border-radius: 8px; margin-bottom: 15px; }
+                        .numero-pedido .num { font-size: 24px; font-weight: bold; color: #1d4ed8; }
+                        .numero-pedido .data { font-size: 11px; color: #6b7280; }
+                        .secao { margin-bottom: 12px; }
+                        .secao-titulo { font-size: 11px; font-weight: bold; color: #6b7280; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+                        .secao-corpo { background: #f9fafb; padding: 10px; border-radius: 8px; }
+                        .item { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #f3f4f6; font-size: 13px; }
+                        .item:last-child { border: none; }
+                        .total { text-align: center; background: #f0fdf4; padding: 15px; border-radius: 8px; }
+                        .total .valor { font-size: 28px; font-weight: bold; color: #15803d; }
+                        .rodape { text-align: center; font-size: 11px; color: #9ca3af; margin-top: 15px; padding-top: 10px; border-top: 1px solid #e5e7eb; }
+                        @media print { body { padding: 10px; } }
+                    </style>
+                </head>
+                <body>
+                    ${container.innerHTML}
+                    <script>setTimeout(() => { window.print(); }, 300);<\/script>
+                </body>
+                </html>
+            `);
+            janela.document.close();
+            showToast('✅ Janela de impressão aberta!', 'success');
         }
 
         // Debug function removed
