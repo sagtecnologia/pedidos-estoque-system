@@ -227,6 +227,190 @@
         let sabores = [];
         let modalCarregado = false;
 
+        // ========================================
+        // MAPEAMENTO DE SABORES COM ÍCONES (LOCAL)
+        // ========================================
+        const mapeamentoSabores = {
+            // FRUTAS VERMELHAS
+            'morango': '🍓', 'strawberry': '🍓', 'fresa': '🍓',
+            'framboesa': '🫐', 'raspberry': '🫐', 'frambuesa': '🫐',
+            'mirtilo': '🫐', 'blueberry': '🫐', 'arándano': '🫐',
+            'cereja': '🍒', 'cherry': '🍒', 'cereza': '🍒',
+            'amora': '🫐', 'blackberry': '🫐', 'mora': '🫐',
+            
+            // FRUTAS TROPICAIS
+            'abacaxi': '🍍', 'pineapple': '🍍', 'piña': '🍍',
+            'melancia': '🍉', 'watermelon': '🍉', 'sandía': '🍉',
+            'melão': '🍈', 'melon': '🍈', 'melón': '🍈',
+            'coco': '🥥', 'coconut': '🥥', 'coco': '🥥',
+            'banana': '🍌', 'platano': '🍌',
+            'mamão': '🧡', 'papaya': '🧡', 'papaia': '🧡',
+            'manga': '🥭', 'mango': '🥭', 'mango': '🥭',
+            'maracujá': '💛', 'passion fruit': '💛',
+            
+            // CÍTRICOS
+            'limão': '🍋', 'lemon': '🍋', 'limón': '🍋',
+            'laranja': '🍊', 'orange': '🍊', 'naranja': '🍊',
+            'tangerina': '🍊', 'tangerine': '🍊', 'mandarina': '🍊',
+            'acerola': '🔴', 'lima': '🍋', 'lime': '🍋',
+            
+            // CHOCOLATE E DOCES
+            'chocolate': '🍫', 'brownie': '🍫', 'ganache': '🍫',
+            'doce de leite': '🟤', 'dulce de leche': '🟤',
+            'baunilha': '🍦', 'vanilla': '🍦', 'vainilla': '🍦',
+            'caramelo': '🟤', 'caramel': '🟤', 'dulce': '🟤',
+            'toffee': '🟤', 'nougat': '🟤',
+            'pudim': '🟤', 'pudding': '🟤', 'flan': '🟤',
+            'trufa': '🍫', 'truffle': '🍫',
+            'brownie': '🍫', 'brigadeiro': '🍫',
+            
+            // NOZES E SEMENTES
+            'amendoim': '🥜', 'peanut': '🥜', 'cacahuete': '🥜',
+            'pistache': '🟢', 'pistachio': '🟢', 'pistacho': '🟢',
+            'noz': '🟤', 'walnut': '🟤', 'nuez': '🟤',
+            'castanha': '🟤', 'chestnut': '🟤', 'castaña': '🟤',
+            'amêndoa': '🟤', 'almond': '🟤', 'almendra': '🟤',
+            'gergelim': '🤍', 'sesame': '🤍', 'ajonjoli': '🤍',
+            
+            // BEBIDAS QUENTES
+            'café': '☕', 'coffee': '☕', 'café': '☕',
+            'cappuccino': '☕', 'espresso': '☕', 'mocha': '☕',
+            'chocolate quente': '🍫', 'hot chocolate': '🍫',
+            'chá': '🫖', 'tea': '🫖', 'té': '🫖',
+            'matcha': '🟢', 'green tea': '🟢',
+            'hortelã': '🍃', 'mint': '🍃', 'menta': '🍃',
+            
+            // FRUTAS DOCES
+            'maçã': '🍎', 'apple': '🍎', 'manzana': '🍎',
+            'pera': '🍐', 'pear': '🍐', 'pera': '🍐',
+            'pêssego': '🍑', 'peach': '🍑', 'durazno': '🍑', 'melocotón': '🍑',
+            'uva': '🍇', 'grape': '🍇', 'uva': '🍇', 'grapes': '🍇',
+            'kiwi': '🥝', 'kiwi': '🥝',
+            'goiaba': '🟢', 'guava': '🟢', 'guayaba': '🟢',
+            'figo': '🟤', 'fig': '🟤', 'higo': '🟤',
+            'ameixa': '🟣', 'plum': '🟣', 'ciruela': '🟣',
+            'mirtilo': '🫐', 'blueberry': '🫐', 'arándano': '🫐',
+            'morango': '🍓', 'strawberry': '🍓', 'fresa': '🍓',
+            
+            // LÁCTEOS E CREMOSOS
+            'natural': '🥛', 'plain': '🥛', 'nature': '🥛',
+            'leite': '🥛', 'milk': '🥛', 'leche': '🥛',
+            'creme': '🤍', 'cream': '🤍', 'crema': '🤍',
+            'manteiga': '🟡', 'butter': '🟡', 'mantequilla': '🟡',
+            'iogurte': '🥛', 'yogurt': '🥛', 'yogur': '🥛',
+            'queijo': '🟡', 'cheese': '🟡', 'queso': '🟡',
+            'leite condensado': '🟡', 'condensed milk': '🟡',
+            'doce de leite': '🟤',
+            
+            // FRUTAS VERMELHAS ESPECIAIS
+            'açai': '💜', 'acai': '💜', 'açaí': '💜',
+            'amora': '🫐', 'mora': '🫐',
+            'cranberry': '🔴', 'arándano rojo': '🔴',
+            'groselha': '🔴', 'currant': '🔴',
+            
+            // EXTRAS
+            'mel': '🟡', 'honey': '🟡', 'miel': '🟡',
+            'gengibre': '🟤', 'ginger': '🟤', 'jengibre': '🟤',
+            'canela': '🟤', 'cinnamon': '🟤', 'canela': '🟤',
+            'cúrcuma': '🟡', 'turmeric': '🟡', 'cúrcuma': '🟡',
+            'açúcar': '⚪', 'sugar': '⚪', 'azúcar': '⚪',
+            'flor': '💜', 'flower': '💜', 'flor': '💜',
+            'lavanda': '💜', 'lavender': '💜',
+            'rosa': '💗', 'rose': '💗',
+            'bétonica': '💜',
+        };
+
+        /**
+         * Obtém o ícone para um sabor específico
+         * Busca com fallback: exata -> contém -> primeira palavra
+         */
+        function obterIconeSabor(saborNome) {
+            if (!saborNome || saborNome.trim().length === 0) return '';
+            
+            const palavraLimpa = saborNome.toLowerCase().trim();
+            
+            // Procurar em TODO o mapeamento de forma case-insensitive
+            for (const [chave, icone] of Object.entries(mapeamentoSabores)) {
+                const chaveLimpa = chave.toLowerCase().trim();
+                
+                // Busca exata
+                if (chaveLimpa === palavraLimpa) {
+                    console.log(`  ✅ "${saborNome}" → ${icone}`);
+                    return icone;
+                }
+            }
+            
+            // Se não encontrou exato, procura se a palavra está parcialmente em alguma chave
+            // Isso ajuda com variações
+            for (const [chave, icone] of Object.entries(mapeamentoSabores)) {
+                const chaveLimpa = chave.toLowerCase().trim();
+                
+                // Se a chave é simples (uma palavra) e a palavra contém a chave
+                if (!chave.includes(' ') && chaveLimpa.length > 1) {
+                    if (palavraLimpa.includes(chaveLimpa) || chaveLimpa.includes(palavraLimpa)) {
+                        console.log(`  ✅ "${saborNome}" → ${icone} (parcial)`);
+                        return icone;
+                    }
+                }
+            }
+            
+            console.log(`  ❌ "${saborNome}" não encontrado`);
+            return '';
+        }
+
+        /**
+         * Formata a exibição do sabor com ícones para CADA ingrediente/fruta
+         * Exemplo: "PEACH MANGO WATERMELON" retorna "🍑 PEACH 🥭 MANGO 🍉 WATERMELON"
+         * Exemplo: "STRAWBERRY APPLE" retorna "🍓 STRAWBERRY 🍎 APPLE"
+         * Com quantidade: adiciona após cada ícone ou repetição do primeiro
+         */
+        function formatarSaborComIcone(saborNome, quantidade = 1) {
+            if (!saborNome) return '';
+            
+            console.log(`\n${'='.repeat(60)}`);
+            console.log(`📝 Formatando: "${saborNome}" (quantidade: ${quantidade})`);
+            console.log('='.repeat(60));
+            
+            // Dividir em palavras (espaço, hífen, vírgula, underscore)
+            const palavras = saborNome.split(/[\s\-,_]+/).filter(p => p.trim().length > 0);
+            
+            console.log(`📚 ${palavras.length} palavra(s) encontrada(s):`, palavras);
+            console.log('🔍 Procurando ícones:\n');
+            
+            if (palavras.length === 0) return saborNome;
+            
+            // Processar cada palavra e procurar ícone
+            const palavrasComIcones = [];
+            
+            for (const palavra of palavras) {
+                const icone = obterIconeSabor(palavra);
+                
+                if (icone) {
+                    palavrasComIcones.push(`${icone} ${palavra}`);
+                } else {
+                    palavrasComIcones.push(palavra);
+                }
+            }
+            
+            let resultado = palavrasComIcones.join(' ');
+            console.log(`\n✨ Resultado antes de repetir: ${resultado}`);
+            
+            // Se tem quantidade > 1, adiciona repetição do primeiro ícone
+            if (quantidade > 1) {
+                const primeiroIcone = obterIconeSabor(palavras[0]);
+                if (primeiroIcone) {
+                    // Repete o ícone do primeiro ingrediente (quantidade - 1 vezes)
+                    resultado = `${primeiroIcone.repeat(quantidade - 1)}${resultado}`;
+                    console.log(`🔁 Com repetição de quantidade: ${resultado}`);
+                }
+            }
+            
+            console.log(`\n✅ FINAL: "${resultado}"`);
+            console.log('='.repeat(60) + '\n');
+            
+            return resultado;
+        }
+
         // Verificar se DOM está carregado
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', inicializar);
@@ -253,6 +437,7 @@
                 produtos = await listarProdutosPublicos();
                 sabores = await listarSaboresPublicos();
 
+                // Renderizar tudo
                 renderizarProdutos();
             } catch (error) {
                 console.error('Erro ao carregar:', error);
@@ -347,10 +532,12 @@
             const produto = produtos.find(p => p.id === produtoId);
             const saboresProduto = sabores.filter(s => s.produto_id === produtoId);
 
-            const html = saboresProduto.map(sabor => `
+            const html = saboresProduto.map(sabor => {
+                const saborComIcones = formatarSaborComIcone(sabor.sabor);
+                return `
                 <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg mb-2">
                     <div class="flex-1">
-                        <p class="font-medium">${sabor.sabor}</p>
+                        <p class="font-medium">${saborComIcones}</p>
                         <p class="text-sm text-gray-600">${formatCurrency(sabor.preco_venda)} | Estoque: ${sabor.quantidade}</p>
                     </div>
                     <div>
@@ -358,7 +545,8 @@
                         <input type="number" id="qtd-sabor-${sabor.id}" data-sabor-id="${sabor.id}" data-produto-id="${produtoId}" data-estoque="${sabor.quantidade}" min="0" max="${sabor.quantidade}" value="0" class="w-20 px-2 py-2 border rounded-lg text-center" oninput="validarQuantidadeSabor(this)">
                     </div>
                 </div>
-            `).join('');
+            `;
+            }).join('');
 
             const modal = document.createElement('div');
             modal.className = 'modal-backdrop';
@@ -650,11 +838,13 @@
                 return;
             }
 
-            container.innerHTML = carrinho.map((item, index) => `
+            container.innerHTML = carrinho.map((item, index) => {
+                const saborFormatado = item.sabor ? formatarSaborComIcone(item.sabor, item.quantidade) : '';
+                return `
                 <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg mb-2">
                     <div class="flex-1">
                         <p class="font-medium">${item.nome}</p>
-                        ${item.sabor ? `<p class="text-sm text-gray-600">${item.sabor}</p>` : ''}
+                        ${saborFormatado ? `<p class="text-sm text-gray-600">${saborFormatado}</p>` : ''}
                         <p class="text-sm text-blue-600">${item.quantidade}x ${formatCurrency(item.preco_unitario)}</p>
                     </div>
                     <div class="flex items-center space-x-3">
@@ -666,7 +856,8 @@
                         </button>
                     </div>
                 </div>
-            `).join('');
+            `;
+            }).join('');
         }
 
         function removerDoCarrinho(index) {
