@@ -149,6 +149,34 @@
         </div>
     </main>
 
+    <!-- Modal Confirmação Genérico -->
+    <div id="modal-confirmacao" class="modal-backdrop hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div class="px-6 py-4">
+                <div class="flex items-start">
+                    <div id="confirmacao-icone" class="flex-shrink-0">
+                        <svg class="h-6 w-6 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4v2m0 0H9m3 0h3M7.5 3h9A4.5 4.5 0 0121 7.5v9A4.5 4.5 0 0116.5 21h-9A4.5 4.5 0 013 16.5v-9A4.5 4.5 0 017.5 3z"></path></svg>
+                    </div>
+                    <div class="ml-4 flex-1">
+                        <h3 id="confirmacao-titulo" class="text-lg font-medium text-gray-900"></h3>
+                        <div id="confirmacao-mensagem" class="mt-2 text-sm text-gray-600"></div>
+                    </div>
+                    <button onclick="fecharModalConfirmacao()" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+            </div>
+            <div class="bg-gray-50 px-6 py-4 rounded-b-lg flex gap-3">
+                <button onclick="fecharModalConfirmacao()" class="flex-1 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 text-gray-700 font-medium">
+                    Cancelar
+                </button>
+                <button id="btn-confirmar-acao" onclick="confirmarModalConfirmacao()" class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium">
+                    Confirmar
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- Modal Cancelar Venda -->
     <div id="modal-cancelar" class="modal-backdrop hidden">
         <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
@@ -161,11 +189,11 @@
             <div class="px-6 py-4">
                 <p class="text-gray-600 mb-6">Como deseja cancelar esta venda?</p>
                 <div class="space-y-3">
-                    <button onclick="cancelarVendaHandler('CANCELADO')" class="w-full px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 text-left">
+                    <button onclick="abrirConfirmacaoCancelamento('CANCELADO')" class="w-full px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 text-left">
                         <div class="font-semibold">❌ Cancelar Definitivo</div>
                         <div class="text-sm opacity-90">A venda será cancelada e os itens retornarão ao estoque</div>
                     </button>
-                    <button onclick="cancelarVendaHandler('RASCUNHO')" class="w-full px-4 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 text-left">
+                    <button onclick="abrirConfirmacaoCancelamento('RASCUNHO')" class="w-full px-4 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 text-left">
                         <div class="font-semibold">🔄 Cancelar e Reabrir</div>
                         <div class="text-sm opacity-90">A venda voltará para rascunho para edição</div>
                     </button>
@@ -1620,7 +1648,9 @@
             return texts[status] || status;
         }
 
-        async function cancelarVendaHandler(novoStatus) {
+        let pendingCancelacao = null;
+
+        function abrirConfirmacaoCancelamento(novoStatus) {
             // VALIDAÇÃO: Impedir cancelamento de vendas já canceladas ou em rascunho
             if (venda.status === 'CANCELADO') {
                 showToast('❌ BLOQUEIO: Esta venda já foi cancelada anteriormente! Cancelamentos duplos não são permitidos.', 'error');
@@ -1633,7 +1663,74 @@
                 closeModal('modal-cancelar');
                 return;
             }
+
+            let titulo, mensagem, botaoTexto, iconeClasse;
+
+            if (novoStatus === 'CANCELADO') {
+                titulo = 'Cancelar Definitivamente?';
+                mensagem = `
+                    <div class="space-y-3">
+                        <p class="font-medium text-gray-900">⚠️ Esta ação é irreversível!</p>
+                        <ul class="space-y-2 text-sm text-gray-700 list-disc pl-5">
+                            <li>Os itens retornarão ao estoque</li>
+                            <li>Cancelamentos duplos não são permitidos</li>
+                            <li>Todas as movimentações serão revertidas</li>
+                        </ul>
+                        <p class="text-sm text-red-600 font-medium">Tem certeza que deseja continuar?</p>
+                    </div>
+                `;
+                botaoTexto = 'Cancelar Definitivamente';
+                iconeClasse = 'text-red-600';
+            } else {
+                titulo = 'Cancelar e Reabrir como Rascunho?';
+                mensagem = `
+                    <div class="space-y-3">
+                        <p class="font-medium text-gray-900">Uma venda voltará para edição</p>
+                        <ul class="space-y-2 text-sm text-gray-700 list-disc pl-5">
+                            <li>O estoque será REVERTIDO (devolvido ao total anterior)</li>
+                            <li>Você poderá fazer alterações</li>
+                            <li>Poderá fazer novo cancelamento depois</li>
+                        </ul>
+                        <p class="text-sm text-gray-600">Deseja continuar?</p>
+                    </div>
+                `;
+                botaoTexto = 'Reabrir como Rascunho';
+                iconeClasse = 'text-yellow-600';
+            }
+
+            pendingCancelacao = novoStatus;
             
+            // Atualizar modal de confirmação
+            document.getElementById('confirmacao-titulo').textContent = titulo;
+            document.getElementById('confirmacao-mensagem').innerHTML = mensagem;
+            document.getElementById('confirmacao-icone').innerHTML = `
+                <svg class="h-6 w-6 ${iconeClasse}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4v2m0 0H9m3 0h3M7.5 3h9A4.5 4.5 0 0121 7.5v9A4.5 4.5 0 0116.5 21h-9A4.5 4.5 0 013 16.5v-9A4.5 4.5 0 017.5 3z"></path>
+                </svg>
+            `;
+            document.getElementById('btn-confirmar-acao').textContent = botaoTexto;
+            document.getElementById('btn-confirmar-acao').className = novoStatus === 'CANCELADO' 
+                ? 'flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium'
+                : 'flex-1 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 font-medium';
+            
+            closeModal('modal-cancelar');
+            openModal('modal-confirmacao');
+        }
+
+        function fecharModalConfirmacao() {
+            closeModal('modal-confirmacao');
+            openModal('modal-cancelar');
+            pendingCancelacao = null;
+        }
+
+        function confirmarModalConfirmacao() {
+            if (pendingCancelacao) {
+                cancelarVendaHandler(pendingCancelacao);
+                closeModal('modal-confirmacao');
+            }
+        }
+
+        async function cancelarVendaHandler(novoStatus) {
             // ✅ VALIDAÇÃO ADICIONAL: Verificar se pode cancelar
             try {
                 const { data: validacao, error: erroValidacao } = await supabase
@@ -1641,7 +1738,6 @@
                 
                 if (erroValidacao) {
                     showToast('❌ Erro ao validar cancelamento: ' + erroValidacao.message, 'error');
-                    closeModal('modal-cancelar');
                     return;
                 }
                 
@@ -1651,28 +1747,11 @@
                         mensagemErro += '\n\nDetalhes:\n' + validacao[0].conflitos.join('\n');
                     }
                     showToast(mensagemErro, 'error', 8000);
-                    closeModal('modal-cancelar');
                     return;
                 }
             } catch (erro) {
                 console.warn('⚠️ Validação RPC não disponível, continuando com validação local', erro);
                 // Continuar com validação local se RPC não estiver disponível
-            }
-            
-            const mensagem = novoStatus === 'CANCELADO' 
-                ? '⚠️ ATENÇÃO: Você está prestes a CANCELAR DEFINITIVAMENTE esta venda!\n\n' +
-                  '• Os itens retornarão ao estoque\n' +
-                  '• Esta ação é IRREVERSÍVEL\n' +
-                  '• Cancelamentos duplos não são permitidos\n\n' +
-                  'Deseja continuar?' 
-                : '⚠️ Você está prestes a CANCELAR e REABRIR esta venda como rascunho.\n\n' +
-                  '• O estoque permanecerá intacto\n' +
-                  '• Você poderá fazer novo cancelamento definitivo\n\n' +
-                  'Deseja continuar?';
-            
-            if (!confirm(mensagem)) {
-                closeModal('modal-cancelar');
-                return;
             }
             
             showLoading(true);
