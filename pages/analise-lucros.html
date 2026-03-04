@@ -313,13 +313,14 @@
             await initNavbar();
             await initSidebar();
             
-            // Definir data padrão (último mês)
+            // Definir data padrão (último mês) - usar fuso local, não UTC
             const hoje = new Date();
             const umMesAtras = new Date();
             umMesAtras.setMonth(hoje.getMonth() - 1);
             
-            document.getElementById('filter-data-inicio').value = umMesAtras.toISOString().split('T')[0];
-            document.getElementById('filter-data-fim').value = hoje.toISOString().split('T')[0];
+            // Usar formatDateLocal para evitar problema de fuso horário com toISOString()
+            document.getElementById('filter-data-inicio').value = formatDateLocal(umMesAtras);
+            document.getElementById('filter-data-fim').value = formatDateLocal(hoje);
             
             await carregarMarcasFiltro();
             await carregarDados();
@@ -348,7 +349,7 @@
             
             if (!marca) {
                 selectProduto.disabled = true;
-                aplicarFiltros();
+                await aplicarFiltros();
                 return;
             }
             
@@ -361,7 +362,7 @@
             });
             
             selectProduto.disabled = false;
-            aplicarFiltros();
+            await aplicarFiltros();
         }
 
         async function carregarSaboresFiltro() {
@@ -372,7 +373,7 @@
             
             if (!produtoId) {
                 selectSabor.disabled = true;
-                aplicarFiltros();
+                await aplicarFiltros();
                 return;
             }
             
@@ -385,10 +386,10 @@
             });
             
             selectSabor.disabled = false;
-            aplicarFiltros();
+            await aplicarFiltros();
         }
 
-        function limparFiltros() {
+        async function limparFiltros() {
             document.getElementById('filter-marca').value = '';
             document.getElementById('filter-produto').value = '';
             document.getElementById('filter-produto').disabled = true;
@@ -398,22 +399,30 @@
             const hoje = new Date();
             const umMesAtras = new Date();
             umMesAtras.setMonth(hoje.getMonth() - 1);
-            document.getElementById('filter-data-inicio').value = umMesAtras.toISOString().split('T')[0];
-            document.getElementById('filter-data-fim').value = hoje.toISOString().split('T')[0];
+            document.getElementById('filter-data-inicio').value = formatDateLocal(umMesAtras);
+            document.getElementById('filter-data-fim').value = formatDateLocal(hoje);
             
             filtroAtual = { marca: '', produto: '', sabor: '', dataInicio: '', dataFim: '' };
-            aplicarFiltros();
+            await carregarDados();
+        }
+        
+        // Formatar data para YYYY-MM-DD no fuso local (sem usar toISOString que converte para UTC)
+        function formatDateLocal(date) {
+            const ano = date.getFullYear();
+            const mes = String(date.getMonth() + 1).padStart(2, '0');
+            const dia = String(date.getDate()).padStart(2, '0');
+            return `${ano}-${mes}-${dia}`;
         }
 
-        function aplicarFiltros() {
+        async function aplicarFiltros() {
             filtroAtual.marca = document.getElementById('filter-marca').value;
             filtroAtual.produto = document.getElementById('filter-produto').value;
             filtroAtual.sabor = document.getElementById('filter-sabor').value;
             filtroAtual.dataInicio = document.getElementById('filter-data-inicio').value;
             filtroAtual.dataFim = document.getElementById('filter-data-fim').value;
             
-            calcularResumo();
-            renderizarTabAtiva();
+            // Sempre recarregar do servidor (igual vendas.html)
+            await carregarDados();
         }
 
         async function carregarDados() {
@@ -447,7 +456,15 @@
                 }
                 
                 // Carregar vendas finalizadas com itens
-                const { data: pedidos, error } = await supabase
+                // FILTRO DE DATA IDÊNTICO AO vendas.html - lê direto do DOM
+                const dataInicio = document.getElementById('filter-data-inicio').value;
+                const dataFim = document.getElementById('filter-data-fim').value;
+                
+                console.log('🔍 DEBUG FILTRO DATAS:');
+                console.log('  dataInicio (input):', dataInicio);
+                console.log('  dataFim (input):', dataFim);
+                
+                let query = supabase
                     .from('pedidos')
                     .select(`
                         *,
@@ -455,8 +472,34 @@
                         solicitante:users!pedidos_solicitante_id_fkey(full_name)
                     `)
                     .eq('tipo_pedido', 'VENDA')
-                    .eq('status', 'FINALIZADO')
-                    .order('created_at', { ascending: false });
+                    .eq('status', 'FINALIZADO');
+                
+                if (dataInicio) {
+                    // Usar construtor com argumentos numéricos (SEMPRE interpreta como local, sem ambiguidade)
+                    const [anoI, mesI, diaI] = dataInicio.split('-').map(Number);
+                    const dataInicioObj = new Date(anoI, mesI - 1, diaI, 0, 0, 0);
+                    const isoInicio = dataInicioObj.toISOString();
+                    console.log('  dataInicio ISO (enviado ao Supabase):', isoInicio);
+                    query = query.gte('created_at', isoInicio);
+                }
+                
+                if (dataFim) {
+                    // Usar construtor com argumentos numéricos (SEMPRE interpreta como local, sem ambiguidade)
+                    const [anoF, mesF, diaF] = dataFim.split('-').map(Number);
+                    const dataFimObj = new Date(anoF, mesF - 1, diaF, 23, 59, 59);
+                    const isoFim = dataFimObj.toISOString();
+                    console.log('  dataFim ISO (enviado ao Supabase):', isoFim);
+                    query = query.lte('created_at', isoFim);
+                }
+                
+                const { data: pedidos, error } = await query.order('created_at', { ascending: false });
+                
+                if (error) throw error;
+                
+                console.log(`📊 Pedidos retornados do servidor: ${pedidos.length}`);
+                pedidos.forEach(p => {
+                    console.log(`  → ${p.numero} | created_at: ${p.created_at} | total: ${p.total}`);
+                });
                 
                 if (error) throw error;
                 
@@ -479,15 +522,18 @@
         function calcularResumo() {
             const vendas = filtrarVendas();
             
+            // Receita = usar venda.total (igual vendas.html), que é a soma dos subtotais do banco
             let receitaTotal = 0;
             let custoTotal = 0;
             
             vendas.forEach(venda => {
+                // Receita: usar o total do pedido (mesmo campo que vendas.html usa)
+                receitaTotal += parseFloat(venda.total || 0);
+                
+                // Custo: calcular a partir dos itens
                 venda.itens.forEach(item => {
                     const produto = todosProdutos.find(p => p.id === item.produto_id);
                     if (produto) {
-                        receitaTotal += item.preco_unitario * item.quantidade;
-                        // Usar preco_compra_entrada da entrada se disponível, senão usar do cadastro do produto
                         const precoCompra = item.preco_compra_entrada !== null && item.preco_compra_entrada !== undefined 
                             ? item.preco_compra_entrada 
                             : (produto.preco_compra || 0);
@@ -499,6 +545,16 @@
             const lucroTotal = receitaTotal - custoTotal;
             const margemMedia = receitaTotal > 0 ? (lucroTotal / receitaTotal * 100) : 0;
             
+            // Debug: log para comparar com vendas.html
+            console.log('📊 Análise de Lucros - Resumo:');
+            console.log(`  Vendas carregadas: ${vendas.length}`);
+            console.log(`  Data início: ${document.getElementById('filter-data-inicio').value}`);
+            console.log(`  Data fim: ${document.getElementById('filter-data-fim').value}`);
+            console.log(`  Receita Total (venda.total): ${receitaTotal.toFixed(2)}`);
+            vendas.forEach(v => {
+                console.log(`  → Venda ${v.numero}: total=${v.total}, created_at=${v.created_at}`);
+            });
+            
             document.getElementById('card-receita').textContent = formatCurrency(receitaTotal);
             document.getElementById('card-custo').textContent = formatCurrency(custoTotal);
             document.getElementById('card-lucro').textContent = formatCurrency(lucroTotal);
@@ -506,25 +562,9 @@
         }
 
         function filtrarVendas() {
-            let vendas = [...vendasFinalizadas];
-            
-            // Filtro de data - Comparar como string (YYYY-MM-DD)
-            if (filtroAtual.dataInicio || filtroAtual.dataFim) {
-                vendas = vendas.filter(v => {
-                    // Extrair apenas a data da venda (sem horário, sem timezone)
-                    const dataVenda = v.created_at.split('T')[0];
-                    
-                    if (filtroAtual.dataInicio && dataVenda < filtroAtual.dataInicio) {
-                        return false;
-                    }
-                    if (filtroAtual.dataFim && dataVenda > filtroAtual.dataFim) {
-                        return false;
-                    }
-                    return true;
-                });
-            }
-            
-            return vendas;
+            // As vendas já foram filtradas por data no servidor (carregarDados)
+            // Aqui só aplicamos filtros de marca/produto/sabor se necessário
+            return [...vendasFinalizadas];
         }
 
         function switchTab(tabName) {
