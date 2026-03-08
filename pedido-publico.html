@@ -246,6 +246,7 @@
         let carrinho = [];
         let produtos = [];
         let sabores = [];
+        let reservasPrePedidos = {};
         let modalCarregado = false;
 
         // ========================================
@@ -454,9 +455,12 @@
                 selectMarca.innerHTML = '<option value="">Todas as marcas</option>' +
                     marcas.map(m => `<option value="${m}">${m}</option>`).join('');
 
-                // Carregar produtos e sabores
-                produtos = await listarProdutosPublicos();
-                sabores = await listarSaboresPublicos();
+                // Carregar produtos, sabores e reservas de pré-pedidos
+                [produtos, sabores, reservasPrePedidos] = await Promise.all([
+                    listarProdutosPublicos(),
+                    listarSaboresPublicos(),
+                    buscarReservasPrePedidos()
+                ]);
 
                 // Renderizar tudo
                 renderizarProdutos();
@@ -509,7 +513,13 @@
             }
 
             container.innerHTML = produtosRender.map(produto => {
-                const statusBadge = produto.status_estoque === 'BAIXO' 
+                const reservaProduto = reservasPrePedidos[produto.id];
+                const reservaTotal = reservaProduto ? reservaProduto.total : 0;
+                const estoqueDisponivel = Math.max(0, produto.estoque_atual - reservaTotal);
+
+                const statusBadge = estoqueDisponivel === 0
+                    ? '<span class="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">Indisponível</span>'
+                    : estoqueDisponivel <= (produto.estoque_minimo || 0)
                     ? '<span class="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">Estoque Baixo</span>'
                     : '<span class="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">Disponível</span>';
 
@@ -529,15 +539,19 @@
                             ${produto.descricao ? `<p class="text-sm text-gray-600 mb-3">${produto.descricao}</p>` : ''}
                             <div class="flex justify-between items-center mb-4">
                                 <span class="text-2xl font-bold text-blue-600">${formatCurrency(produto.preco_venda)}</span>
-                                <span class="text-sm text-gray-500">Estoque: ${produto.estoque_atual}</span>
+                                <span class="text-sm text-gray-500">Disponível: ${estoqueDisponivel}</span>
                             </div>
-                            ${temSabores ? `
+                            ${estoqueDisponivel === 0 && !temSabores ? `
+                                <button disabled class="w-full bg-gray-300 text-gray-500 py-2 rounded-lg cursor-not-allowed">
+                                    Indisponível
+                                </button>
+                            ` : temSabores ? `
                                 <button onclick="abrirSabores('${produto.id}')" class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition">
                                     Ver Sabores (${saboresProduto.length})
                                 </button>
                             ` : `
                                 <div class="flex space-x-2">
-                                    <input type="number" id="qtd-${produto.id}" data-estoque="${produto.estoque_atual}" min="0" max="${produto.estoque_atual}" value="0" class="w-20 px-2 py-2 border rounded-lg text-center" oninput="validarQuantidadeProduto(this)">
+                                    <input type="number" id="qtd-${produto.id}" data-estoque="${estoqueDisponivel}" min="0" max="${estoqueDisponivel}" value="0" class="w-20 px-2 py-2 border rounded-lg text-center" oninput="validarQuantidadeProduto(this)">
                                     <button onclick="adicionarAoCarrinho('${produto.id}')" class="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition">
                                         Adicionar
                                     </button>
@@ -553,18 +567,26 @@
             const produto = produtos.find(p => p.id === produtoId);
             const saboresProduto = sabores.filter(s => s.produto_id === produtoId);
 
+            const reservaProduto = reservasPrePedidos[produtoId];
+
             const html = saboresProduto.map(sabor => {
                 const saborComIcones = formatarSaborComIcone(sabor.sabor);
+                const reservaSabor = reservaProduto && reservaProduto.sabores[sabor.id] ? reservaProduto.sabores[sabor.id] : 0;
+                const estoqueDisponivelSabor = Math.max(0, sabor.quantidade - reservaSabor);
                 return `
-                <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg mb-2">
+                <div class="flex justify-between items-center p-3 ${estoqueDisponivelSabor === 0 ? 'bg-red-50 opacity-60' : 'bg-gray-50'} rounded-lg mb-2">
                     <div class="flex-1">
                         <p class="font-medium">${saborComIcones}</p>
-                        <p class="text-sm text-gray-600">${formatCurrency(sabor.preco_venda)} | Estoque: ${sabor.quantidade}</p>
+                        <p class="text-sm text-gray-600">${formatCurrency(sabor.preco_venda)} | Disponível: ${estoqueDisponivelSabor}</p>
                     </div>
                     <div class="flex items-center space-x-2">
-                        <button onclick="diminuirQtdSabor('qtd-sabor-${sabor.id}')" class="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-sm font-bold">−</button>
-                        <input type="number" id="qtd-sabor-${sabor.id}" data-sabor-id="${sabor.id}" data-produto-id="${produtoId}" data-estoque="${sabor.quantidade}" min="0" max="${sabor.quantidade}" value="0" class="w-12 px-1 py-1 border rounded text-center text-sm" oninput="validarQuantidadeSabor(this)">
-                        <button onclick="aumentarQtdSabor('qtd-sabor-${sabor.id}')" class="px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-sm font-bold">+</button>
+                        ${estoqueDisponivelSabor === 0 ? `
+                            <span class="text-xs text-red-600 font-medium">Indisponível</span>
+                        ` : `
+                            <button onclick="diminuirQtdSabor('qtd-sabor-${sabor.id}')" class="px-2 py-1 bg-red-500 text-white rounded hover:bg-red-600 text-sm font-bold">−</button>
+                            <input type="number" id="qtd-sabor-${sabor.id}" data-sabor-id="${sabor.id}" data-produto-id="${produtoId}" data-estoque="${estoqueDisponivelSabor}" min="0" max="${estoqueDisponivelSabor}" value="0" class="w-12 px-1 py-1 border rounded text-center text-sm" oninput="validarQuantidadeSabor(this)">
+                            <button onclick="aumentarQtdSabor('qtd-sabor-${sabor.id}')" class="px-2 py-1 bg-green-500 text-white rounded hover:bg-green-600 text-sm font-bold">+</button>
+                        `}
                     </div>
                 </div>
             `;
@@ -686,8 +708,12 @@
                 return;
             }
 
-            if (qtd > produto.estoque_atual) {
-                alert(`Quantidade solicitada (${qtd}) excede o estoque disponível (${produto.estoque_atual})`);
+            const reservaProduto = reservasPrePedidos[produtoId];
+            const reservaTotal = reservaProduto ? reservaProduto.total : 0;
+            const estoqueDisponivel = Math.max(0, produto.estoque_atual - reservaTotal);
+
+            if (qtd > estoqueDisponivel) {
+                alert(`Quantidade solicitada (${qtd}) excede o estoque disponível (${estoqueDisponivel})`);
                 return;
             }
 
@@ -699,8 +725,8 @@
             if (itemExistente) {
                 // Se já existe, verificar se a soma não excede o estoque
                 const novaQuantidade = itemExistente.quantidade + qtd;
-                if (novaQuantidade > produto.estoque_atual) {
-                    alert(`Quantidade total (${novaQuantidade}) excede o estoque disponível (${produto.estoque_atual})`);
+                if (novaQuantidade > estoqueDisponivel) {
+                    alert(`Quantidade total (${novaQuantidade}) excede o estoque disponível (${estoqueDisponivel})`);
                     return;
                 }
                 // Somar à quantidade existente
@@ -716,7 +742,7 @@
                     sabor: null,
                     quantidade: qtd,
                     preco_unitario: produto.preco_venda,
-                    estoque_disponivel: produto.estoque_atual
+                    estoque_disponivel: estoqueDisponivel
                 });
                 showToast(`${produto.nome} adicionado ao carrinho!`, 'success');
             }
@@ -744,11 +770,15 @@
                         item.produto_id === produtoId && item.sabor_id === sabor.id
                     );
 
+                    const reservaProd = reservasPrePedidos[produtoId];
+                    const reservaSab = reservaProd && reservaProd.sabores[sabor.id] ? reservaProd.sabores[sabor.id] : 0;
+                    const estoqueDispSabor = Math.max(0, sabor.quantidade - reservaSab);
+
                     if (itemExistente) {
                         // Se já existe, verificar se a soma não excede o estoque
                         const novaQuantidade = itemExistente.quantidade + qtd;
-                        if (novaQuantidade > sabor.quantidade) {
-                            erros.push(`${sabor.sabor}: quantidade total (${novaQuantidade}) excede estoque (${sabor.quantidade})`);
+                        if (novaQuantidade > estoqueDispSabor) {
+                            erros.push(`${sabor.sabor}: quantidade total (${novaQuantidade}) excede estoque disponível (${estoqueDispSabor})`);
                         } else {
                             // Somar à quantidade existente
                             itemExistente.quantidade = novaQuantidade;
@@ -756,8 +786,8 @@
                         }
                     } else {
                         // Novo item
-                        if (qtd > sabor.quantidade) {
-                            erros.push(`${sabor.sabor}: quantidade (${qtd}) excede estoque (${sabor.quantidade})`);
+                        if (qtd > estoqueDispSabor) {
+                            erros.push(`${sabor.sabor}: quantidade (${qtd}) excede estoque disponível (${estoqueDispSabor})`);
                         } else {
                             carrinho.push({
                                 produto_id: produtoId,
@@ -767,7 +797,7 @@
                                 sabor: sabor.sabor,
                                 quantidade: qtd,
                                 preco_unitario: sabor.preco_venda,
-                                estoque_disponivel: sabor.quantidade
+                                estoque_disponivel: estoqueDispSabor
                             });
                             adicionados++;
                         }
@@ -809,8 +839,12 @@
                 return;
             }
 
-            if (qtd > sabor.quantidade) {
-                alert(`Quantidade solicitada (${qtd}) excede o estoque disponível (${sabor.quantidade})`);
+            const reservaProd = reservasPrePedidos[produtoId];
+            const reservaSab = reservaProd && reservaProd.sabores[saborId] ? reservaProd.sabores[saborId] : 0;
+            const estoqueDispSabor = Math.max(0, sabor.quantidade - reservaSab);
+
+            if (qtd > estoqueDispSabor) {
+                alert(`Quantidade solicitada (${qtd}) excede o estoque disponível (${estoqueDispSabor})`);
                 return;
             }
 
@@ -822,8 +856,8 @@
             if (itemExistente) {
                 // Se já existe, verificar se a soma não excede o estoque
                 const novaQuantidade = itemExistente.quantidade + qtd;
-                if (novaQuantidade > sabor.quantidade) {
-                    alert(`Quantidade total (${novaQuantidade}) excede o estoque disponível (${sabor.quantidade})`);
+                if (novaQuantidade > estoqueDispSabor) {
+                    alert(`Quantidade total (${novaQuantidade}) excede o estoque disponível (${estoqueDispSabor})`);
                     return;
                 }
                 // Somar à quantidade existente
@@ -839,7 +873,7 @@
                     sabor: sabor.sabor,
                     quantidade: qtd,
                     preco_unitario: sabor.preco_venda,
-                    estoque_disponivel: sabor.quantidade
+                    estoque_disponivel: estoqueDispSabor
                 });
                 showToast(`${produto.nome} - ${sabor.sabor} adicionado!`, 'success');
             }

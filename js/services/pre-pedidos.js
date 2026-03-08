@@ -82,6 +82,44 @@ async function listarMarcasPublicas() {
 }
 
 /**
+ * Buscar quantidades reservadas em pré-pedidos pendentes/em análise
+ * Retorna um mapa com as quantidades reservadas por produto_id e sabor_id
+ */
+async function buscarReservasPrePedidos() {
+    try {
+        const { data, error } = await supabase
+            .from('pre_pedido_itens')
+            .select('produto_id, sabor_id, quantidade, pre_pedido:pre_pedidos!inner(status)')
+            .in('pre_pedido.status', ['PENDENTE', 'EM_ANALISE']);
+
+        if (error) throw error;
+
+        // Agrupar por produto_id e sabor_id
+        const reservas = {};
+        (data || []).forEach(item => {
+            const chaveProduto = item.produto_id;
+            const chaveSabor = item.sabor_id;
+            const qtd = parseFloat(item.quantidade) || 0;
+
+            // Reserva por produto (soma total)
+            if (!reservas[chaveProduto]) reservas[chaveProduto] = { total: 0, sabores: {} };
+            reservas[chaveProduto].total += qtd;
+
+            // Reserva por sabor específico
+            if (chaveSabor) {
+                if (!reservas[chaveProduto].sabores[chaveSabor]) reservas[chaveProduto].sabores[chaveSabor] = 0;
+                reservas[chaveProduto].sabores[chaveSabor] += qtd;
+            }
+        });
+
+        return reservas;
+    } catch (error) {
+        console.error('Erro ao buscar reservas de pré-pedidos:', error);
+        return {};
+    }
+}
+
+/**
  * Criar um novo pré-pedido (público)
  */
 async function criarPrePedido(dadosPedido) {
