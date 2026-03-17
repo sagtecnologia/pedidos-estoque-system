@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ajuste de Estoque - Sistema de Compras</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body class="bg-gray-100">
+    <div id="navbar"></div>
+    <div id="sidebar-container"></div>
+
+    <main class="lg:ml-64 pt-16">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+            <!-- Header -->
+            <div class="mb-6 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                <div>
+                    <h2 class="text-3xl font-bold text-gray-900 flex items-center gap-3">
+                        <i class="fas fa-sliders-h text-blue-600"></i>
+                        Ajuste de Estoque
+                    </h2>
+                    <p class="text-gray-500 mt-1">Informe o novo estoque e o motivo diretamente na linha do sabor</p>
+                </div>
+                <div class="flex gap-3 flex-shrink-0">
+                    <button onclick="abrirHistorico()"
+                        class="flex items-center gap-2 px-4 py-2 border border-gray-300 bg-white rounded-lg hover:bg-gray-50 text-gray-700 font-medium transition shadow-sm">
+                        <i class="fas fa-history"></i> Histórico
+                    </button>
+                    <button onclick="salvarTodos()"
+                        class="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition shadow-sm">
+                        <i class="fas fa-save"></i> Salvar todos
+                    </button>
+                </div>
+            </div>
+
+            <!-- Filtros -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5 mb-4">
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Produto</label>
+                        <div class="relative">
+                            <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none"></i>
+                            <input id="filter-busca" type="text" placeholder="Buscar produto ou sabor..."
+                                class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                                oninput="aplicarFiltros()">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Marca</label>
+                        <select id="filter-marca"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                            onchange="aplicarFiltros()">
+                            <option value="">Todas as marcas</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
+                        <select id="filter-categoria"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                            onchange="aplicarFiltros()">
+                            <option value="">Todas as categorias</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Situação</label>
+                        <select id="filter-situacao"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                            onchange="aplicarFiltros()">
+                            <option value="">Todos</option>
+                            <option value="com">Com estoque</option>
+                            <option value="sem">Sem estoque (zerado)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <button onclick="limparFiltros()"
+                            class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600 font-medium text-sm transition">
+                            <i class="fas fa-broom"></i> Limpar Filtros
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Contador -->
+            <div class="mb-3 flex items-center gap-2 text-sm text-gray-500 px-1">
+                <span id="contador-exibidos" class="font-medium">0 sabores exibidos</span>
+                <span>•</span>
+                <span id="contador-pendentes" class="font-semibold text-blue-600">0 ajustes pendentes</span>
+            </div>
+
+            <!-- Tabela -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Produto</th>
+                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Marca / Categoria</th>
+                                <th class="px-6 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider w-32">Estoque Atual</th>
+                                <th class="px-6 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider w-36">Novo Estoque</th>
+                                <th class="px-6 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider w-28">Diferença</th>
+                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Motivo</th>
+                                <th class="px-6 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider w-24">Ação</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tbody-ajuste" class="bg-white divide-y divide-gray-200">
+                            <tr>
+                                <td colspan="7" class="px-6 py-12 text-center text-gray-400">
+                                    <i class="fas fa-spinner fa-spin text-2xl mb-2 block"></i>
+                                    Carregando sabores...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Modal: Histórico de Ajustes -->
+    <div id="modal-historico" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-5xl flex flex-col max-h-[85vh]">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
+                <h2 class="text-xl font-bold text-gray-900 flex items-center gap-2">
+                    <i class="fas fa-history text-blue-600"></i> Histórico de Ajustes
+                </h2>
+                <button onclick="fecharHistorico()" class="text-gray-400 hover:text-gray-600 transition">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto flex-1">
+                <div id="historico-content">
+                    <div class="text-center text-gray-400 py-8">
+                        <i class="fas fa-spinner fa-spin text-2xl mb-2 block"></i>
+                        Carregando...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Global -->
+    <div id="loading" class="hidden fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-xl shadow-xl text-center">
+            <div class="spinner mx-auto"></div>
+            <p class="mt-4 text-gray-700 font-medium">Processando...</p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../js/config.js"></script>
+    <script src="../js/session-manager.js"></script>
+    <script src="../js/utils.js"></script>
+    <script src="../js/auth.js"></script>
+    <script src="../js/services/produtos.js"></script>
+    <script src="../js/services/estoque.js"></script>
+    <script src="../components/navbar.js"></script>
+    <script src="../components/sidebar.js"></script>
+
+    <script>
+        // -------------------------------------------------------
+        // Estado
+        // -------------------------------------------------------
+        let todosSabores = [];       // dados crus do banco
+        let saboresFiltrados = [];   // após filtros
+        let ajustesPendentes = {};   // { saborId: { novoEstoque, motivo } }
+
+        // -------------------------------------------------------
+        // Init
+        // -------------------------------------------------------
+        (async () => {
+            await checkAuth();
+            document.getElementById('navbar').innerHTML = createNavbar();
+            document.getElementById('sidebar-container').innerHTML = createSidebar();
+            await initNavbar();
+            await initSidebar();
+
+            await Promise.all([carregarFiltros(), carregarSabores()]);
+        })();
+
+        // -------------------------------------------------------
+        // Carregar opções de filtro
+        // -------------------------------------------------------
+        async function carregarFiltros() {
+            try {
+                const [marcas, categorias] = await Promise.all([getMarcas(), getCategorias()]);
+
+                const selMarca = document.getElementById('filter-marca');
+                marcas.forEach(m => {
+                    const opt = document.createElement('option');
+                    opt.value = m;
+                    opt.textContent = m;
+                    selMarca.appendChild(opt);
+                });
+
+                const selCat = document.getElementById('filter-categoria');
+                categorias.forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c;
+                    opt.textContent = c;
+                    selCat.appendChild(opt);
+                });
+            } catch (err) {
+                console.warn('Erro ao carregar filtros:', err);
+            }
+        }
+
+        // -------------------------------------------------------
+        // Carregar sabores do banco
+        // -------------------------------------------------------
+        async function carregarSabores() {
+            showLoading(true);
+            try {
+                const { data, error } = await supabase
+                    .from('produto_sabores')
+                    .select(`
+                        id,
+                        sabor,
+                        quantidade,
+                        produto:produtos(id, nome, codigo, marca, categoria, preco_compra, preco_venda, estoque_minimo, unidade)
+                    `)
+                    .eq('ativo', true)
+                    .order('sabor');
+
+                if (error) throw error;
+
+                // Filtrar apenas sabores cujo produto existe e está ativo
+                todosSabores = (data || []).filter(s => s.produto);
+                ajustesPendentes = {}; // limpar pendentes ao recarregar
+                aplicarFiltros();
+            } catch (err) {
+                handleError(err, 'Erro ao carregar sabores');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // -------------------------------------------------------
+        // Filtros
+        // -------------------------------------------------------
+        function aplicarFiltros() {
+            const busca = document.getElementById('filter-busca').value.toLowerCase().trim();
+            const marca = document.getElementById('filter-marca').value;
+            const categoria = document.getElementById('filter-categoria').value;
+            const situacao = document.getElementById('filter-situacao').value;
+
+            saboresFiltrados = todosSabores.filter(s => {
+                const prod = s.produto;
+                const qtd = parseFloat(s.quantidade) || 0;
+                if (marca && prod.marca !== marca) return false;
+                if (categoria && prod.categoria !== categoria) return false;
+                if (situacao === 'com' && qtd <= 0) return false;
+                if (situacao === 'sem' && qtd > 0) return false;
+                if (busca) {
+                    const texto = `${s.sabor} ${prod.nome} ${prod.codigo || ''}`.toLowerCase();
+                    if (!texto.includes(busca)) return false;
+                }
+                return true;
+            });
+
+            renderizar();
+        }
+
+        function limparFiltros() {
+            document.getElementById('filter-busca').value = '';
+            document.getElementById('filter-marca').value = '';
+            document.getElementById('filter-categoria').value = '';
+            document.getElementById('filter-situacao').value = '';
+            aplicarFiltros();
+        }
+
+        // -------------------------------------------------------
+        // Renderizar tabela
+        // -------------------------------------------------------
+        function renderizar() {
+            const tbody = document.getElementById('tbody-ajuste');
+
+            if (saboresFiltrados.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="px-6 py-12 text-center text-gray-400">
+                            <i class="fas fa-box-open text-3xl mb-3 block"></i>
+                            Nenhum sabor encontrado com os filtros aplicados.
+                        </td>
+                    </tr>`;
+                atualizarContador();
+                return;
+            }
+
+            tbody.innerHTML = saboresFiltrados.map(s => {
+                const prod = s.produto;
+                const estoqueAtual = parseFloat(s.quantidade) || 0;
+                const ajuste = ajustesPendentes[s.id];
+                const novoEstoqueVal = ajuste !== undefined ? ajuste.novoEstoque : '';
+                const motivoSelecionado = ajuste ? ajuste.motivo : 'Correção de Inventário';
+
+                const diff = novoEstoqueVal !== '' ? (parseFloat(novoEstoqueVal) - estoqueAtual) : 0;
+                const diffStr = novoEstoqueVal !== '' ? (diff >= 0 ? '+' : '') + diff.toFixed(2) : '0.00';
+                const diffClass = diff > 0
+                    ? 'font-semibold text-green-600'
+                    : diff < 0
+                        ? 'font-semibold text-red-600'
+                        : 'text-gray-400';
+
+                const temAjuste = novoEstoqueVal !== '' && diff !== 0;
+                const sku = prod.codigo || '-';
+
+                return `
+                    <tr id="row-${s.id}" class="hover:bg-gray-50 transition-colors ${temAjuste ? 'bg-blue-50 border-l-4 border-blue-400' : ''}">
+
+                        <!-- Produto / Sabor -->
+                        <td class="px-6 py-4">
+                            <div class="font-semibold text-gray-900 text-sm uppercase">${s.sabor}</div>
+                            <div class="text-xs text-gray-500 mt-0.5">${prod.nome}</div>
+                            <div class="text-xs text-gray-400 mt-0.5">SKU: ${sku} | ID: ${s.id}</div>
+                        </td>
+
+                        <!-- Marca / Categoria -->
+                        <td class="px-6 py-4">
+                            <div class="text-sm font-medium text-gray-800">${prod.marca || '-'}</div>
+                            <div class="text-xs text-gray-500 uppercase mt-0.5">${prod.categoria || '-'}</div>
+                        </td>
+
+                        <!-- Estoque Atual -->
+                        <td class="px-6 py-4 text-center">
+                            <span class="text-base font-bold text-gray-800">${estoqueAtual.toFixed(2)}</span>
+                        </td>
+
+                        <!-- Novo Estoque -->
+                        <td class="px-6 py-4 text-center">
+                            <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value="${novoEstoqueVal}"
+                                placeholder="—"
+                                class="w-28 text-center px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white"
+                                oninput="onNovoEstoqueInput('${s.id}', this.value, ${estoqueAtual})"
+                                onchange="onNovoEstoqueChange('${s.id}', this.value, ${estoqueAtual})"
+                            >
+                        </td>
+
+                        <!-- Diferença -->
+                        <td class="px-6 py-4 text-center">
+                            <span id="diff-${s.id}" class="${diffClass}">${diffStr}</span>
+                        </td>
+
+                        <!-- Motivo -->
+                        <td class="px-6 py-4">
+                            <select id="motivo-${s.id}"
+                                class="w-full px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                                onchange="onMotivoChange('${s.id}', this.value)">
+                                <option value="Correção de Inventário" ${motivoSelecionado === 'Correção de Inventário' ? 'selected' : ''}>Correção de Inventário</option>
+                                <option value="Perda / Avaria"          ${motivoSelecionado === 'Perda / Avaria' ? 'selected' : ''}>Perda / Avaria</option>
+                                <option value="Ajuste de Contagem"      ${motivoSelecionado === 'Ajuste de Contagem' ? 'selected' : ''}>Ajuste de Contagem</option>
+                                <option value="Outros"                  ${motivoSelecionado === 'Outros' ? 'selected' : ''}>Outros</option>
+                            </select>
+                        </td>
+
+                        <!-- Ação -->
+                        <td class="px-6 py-4 text-center">
+                            <button
+                                onclick="salvarAjuste('${s.id}', ${estoqueAtual}, '${prod.id}')"
+                                class="flex items-center gap-1.5 mx-auto px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-100 text-sm font-medium transition"
+                                title="Salvar ajuste deste sabor">
+                                <i class="fas fa-save text-xs"></i> Salvar
+                            </button>
+                        </td>
+
+                    </tr>
+                `;
+            }).join('');
+
+            atualizarContador();
+        }
+
+        // -------------------------------------------------------
+        // Handlers de input / change
+        // -------------------------------------------------------
+        function onNovoEstoqueInput(saborId, valor, estoqueAtual) {
+            // Atualizar coluna Diferença em tempo real (sem re-render completo)
+            const diff = valor !== '' && valor !== null ? (parseFloat(valor) - estoqueAtual) : 0;
+            const diffStr = valor !== '' ? (diff >= 0 ? '+' : '') + diff.toFixed(2) : '0.00';
+            const diffEl = document.getElementById(`diff-${saborId}`);
+            if (diffEl) {
+                diffEl.textContent = diffStr;
+                diffEl.className = diff > 0
+                    ? 'font-semibold text-green-600'
+                    : diff < 0
+                        ? 'font-semibold text-red-600'
+                        : 'text-gray-400';
+            }
+
+            // Marcar / desmarcar linha como pendente
+            const row = document.getElementById(`row-${saborId}`);
+            if (valor !== '' && parseFloat(valor) !== estoqueAtual) {
+                const motivo = document.getElementById(`motivo-${saborId}`)?.value || 'Correção de Inventário';
+                ajustesPendentes[saborId] = { novoEstoque: parseFloat(valor), motivo };
+                if (row) {
+                    row.classList.add('bg-blue-50', 'border-l-4', 'border-blue-400');
+                }
+            } else {
+                delete ajustesPendentes[saborId];
+                if (row) {
+                    row.classList.remove('bg-blue-50', 'border-l-4', 'border-blue-400');
+                }
+            }
+            atualizarContador();
+        }
+
+        function onNovoEstoqueChange(saborId, valor, estoqueAtual) {
+            // Também disparado ao perder foco — reutiliza lógica do oninput
+            onNovoEstoqueInput(saborId, valor, estoqueAtual);
+        }
+
+        function onMotivoChange(saborId, valor) {
+            if (ajustesPendentes[saborId]) {
+                ajustesPendentes[saborId].motivo = valor;
+            }
+        }
+
+        // -------------------------------------------------------
+        // Contador no cabeçalho
+        // -------------------------------------------------------
+        function atualizarContador() {
+            const n = saboresFiltrados.length;
+            const p = Object.keys(ajustesPendentes).length;
+            document.getElementById('contador-exibidos').textContent =
+                `${n} sabor${n !== 1 ? 'es' : ''} exibido${n !== 1 ? 's' : ''}`;
+            document.getElementById('contador-pendentes').textContent =
+                `${p} ajuste${p !== 1 ? 's' : ''} pendente${p !== 1 ? 's' : ''}`;
+        }
+
+        // -------------------------------------------------------
+        // Salvar ajuste individual
+        // -------------------------------------------------------
+        async function salvarAjuste(saborId, estoqueAtual, produtoId) {
+            const row = document.getElementById(`row-${saborId}`);
+            const inputEl = row ? row.querySelector('input[type="number"]') : null;
+
+            if (!inputEl || inputEl.value === '') {
+                showToast('Informe o novo valor de estoque antes de salvar.', 'warning');
+                return;
+            }
+
+            const novoEstoque = parseFloat(inputEl.value);
+            if (isNaN(novoEstoque) || novoEstoque < 0) {
+                showToast('Valor de estoque inválido.', 'error');
+                return;
+            }
+
+            const diff = novoEstoque - estoqueAtual;
+            if (diff === 0) {
+                showToast('Nenhuma diferença detectada. O estoque já está com esse valor.', 'info');
+                return;
+            }
+
+            const motivo = document.getElementById(`motivo-${saborId}`)?.value || 'Correção de Inventário';
+            const ok = await executarAjuste(saborId, produtoId, estoqueAtual, novoEstoque, diff, motivo);
+
+            if (ok) {
+                showToast('Ajuste salvo com sucesso!', 'success');
+                // Re-renderizar apenas a linha no modo "limpo"
+                aplicarFiltros();
+            }
+        }
+
+        // -------------------------------------------------------
+        // Salvar todos os pendentes
+        // -------------------------------------------------------
+        async function salvarTodos() {
+            const ids = Object.keys(ajustesPendentes);
+            if (ids.length === 0) {
+                showToast('Nenhum ajuste pendente para salvar.', 'info');
+                return;
+            }
+
+            const confirmado = await confirmAction(`Confirmar ${ids.length} ajuste(s) de estoque pendente(s)?`);
+            if (!confirmado) return;
+
+            showLoading(true);
+            let sucessos = 0;
+            let erros = 0;
+
+            for (const saborId of ids) {
+                const sabor = todosSabores.find(s => s.id === saborId);
+                if (!sabor) continue;
+
+                const pendente = ajustesPendentes[saborId];
+                const estoqueAtual = parseFloat(sabor.quantidade) || 0;
+                const diff = pendente.novoEstoque - estoqueAtual;
+
+                const ok = await executarAjuste(
+                    saborId, sabor.produto.id,
+                    estoqueAtual, pendente.novoEstoque,
+                    diff, pendente.motivo,
+                    true /* silencioso */
+                );
+                if (ok) sucessos++; else erros++;
+            }
+
+            showLoading(false);
+            if (sucessos > 0) showToast(`${sucessos} ajuste(s) salvo(s) com sucesso!`, 'success');
+            if (erros > 0) showToast(`${erros} ajuste(s) falharam. Verifique e tente novamente.`, 'error');
+
+            await carregarSabores();
+        }
+
+        // -------------------------------------------------------
+        // Executar ajuste no banco
+        // -------------------------------------------------------
+        async function executarAjuste(saborId, produtoId, estoqueAtual, novoEstoque, diff, motivo, silencioso = false) {
+            try {
+                const user = await getCurrentUser();
+                const tipo = diff > 0 ? 'ENTRADA' : 'SAIDA';
+                const quantidade = Math.abs(diff);
+                const observacao = `Ajuste de Estoque - ${motivo}`;
+
+                // 1. Atualizar quantidade do sabor em produto_sabores
+                const { error: errSabor } = await supabase
+                    .from('produto_sabores')
+                    .update({
+                        quantidade: novoEstoque,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', saborId);
+
+                if (errSabor) throw errSabor;
+
+                // 2. Registrar movimentação de estoque
+                const { error: errMov } = await supabase
+                    .from('estoque_movimentacoes')
+                    .insert([{
+                        produto_id: produtoId,
+                        sabor_id: saborId,
+                        tipo,
+                        quantidade,
+                        estoque_anterior: estoqueAtual,
+                        estoque_novo: novoEstoque,
+                        usuario_id: user.id,
+                        observacao
+                    }]);
+
+                if (errMov) throw errMov;
+
+                // 3. Recalcular estoque_atual do produto (soma de todos os sabores ativos)
+                const { data: saboresProd, error: errLista } = await supabase
+                    .from('produto_sabores')
+                    .select('quantidade')
+                    .eq('produto_id', produtoId)
+                    .eq('ativo', true);
+
+                if (!errLista && saboresProd) {
+                    const totalEstoque = saboresProd.reduce((acc, s) => acc + (parseFloat(s.quantidade) || 0), 0);
+                    await supabase
+                        .from('produtos')
+                        .update({ estoque_atual: totalEstoque })
+                        .eq('id', produtoId);
+                }
+
+                // 4. Atualizar estado local para não precisar recarregar tudo no "salvar todos"
+                const saborLocal = todosSabores.find(s => s.id === saborId);
+                if (saborLocal) saborLocal.quantidade = novoEstoque;
+                delete ajustesPendentes[saborId];
+
+                return true;
+            } catch (err) {
+                if (!silencioso) handleError(err, 'Erro ao salvar ajuste');
+                else console.error('Erro ao salvar ajuste:', err);
+                return false;
+            }
+        }
+
+        // -------------------------------------------------------
+        // Modal Histórico
+        // -------------------------------------------------------
+        async function abrirHistorico() {
+            document.getElementById('modal-historico').classList.remove('hidden');
+            const container = document.getElementById('historico-content');
+            container.innerHTML = `
+                <div class="text-center text-gray-400 py-8">
+                    <i class="fas fa-spinner fa-spin text-2xl mb-2 block"></i>
+                    Carregando histórico...
+                </div>`;
+
+            try {
+                const { data, error } = await supabase
+                    .from('estoque_movimentacoes')
+                    .select(`
+                        *,
+                        produto:produtos(nome, marca),
+                        sabor:produto_sabores(sabor),
+                        usuario:users(full_name)
+                    `)
+                    .ilike('observacao', '%Ajuste de Estoque%')
+                    .order('created_at', { ascending: false })
+                    .limit(150);
+
+                if (error) throw error;
+
+                if (!data || data.length === 0) {
+                    container.innerHTML = `
+                        <div class="text-center text-gray-400 py-12">
+                            <i class="fas fa-inbox text-4xl mb-3 block"></i>
+                            Nenhum ajuste de estoque registrado ainda.
+                        </div>`;
+                    return;
+                }
+
+                container.innerHTML = `
+                    <div class="overflow-x-auto rounded-lg border border-gray-200">
+                        <table class="min-w-full divide-y divide-gray-200 text-sm">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Data</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Produto</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Sabor</th>
+                                    <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Tipo</th>
+                                    <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Qtd</th>
+                                    <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Anterior</th>
+                                    <th class="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Novo</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Motivo</th>
+                                    <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Usuário</th>
+                                </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                ${data.map(m => {
+                                    const tipoBadge = m.tipo === 'ENTRADA'
+                                        ? '<span class="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-800 font-medium">Entrada</span>'
+                                        : '<span class="px-2 py-0.5 text-xs rounded-full bg-red-100 text-red-800 font-medium">Saída</span>';
+                                    const motivo = (m.observacao || '').replace('Ajuste de Estoque - ', '');
+                                    const diffVal = parseFloat(m.estoque_novo) - parseFloat(m.estoque_anterior);
+                                    const diffCls = diffVal >= 0 ? 'text-green-600' : 'text-red-600';
+                                    return `
+                                        <tr class="hover:bg-gray-50">
+                                            <td class="px-4 py-3 text-gray-600 whitespace-nowrap">${formatDateTime(m.created_at)}</td>
+                                            <td class="px-4 py-3 text-gray-900 font-medium">${m.produto?.nome || '-'}</td>
+                                            <td class="px-4 py-3 text-blue-600 font-medium">${m.sabor?.sabor || '-'}</td>
+                                            <td class="px-4 py-3 text-center">${tipoBadge}</td>
+                                            <td class="px-4 py-3 text-center font-semibold ${diffCls}">${m.tipo === 'ENTRADA' ? '+' : '-'}${parseFloat(m.quantidade).toFixed(2)}</td>
+                                            <td class="px-4 py-3 text-center text-gray-600">${parseFloat(m.estoque_anterior).toFixed(2)}</td>
+                                            <td class="px-4 py-3 text-center text-gray-800 font-medium">${parseFloat(m.estoque_novo).toFixed(2)}</td>
+                                            <td class="px-4 py-3 text-gray-600">${motivo}</td>
+                                            <td class="px-4 py-3 text-gray-600">${m.usuario?.full_name || '-'}</td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                    <p class="text-xs text-gray-400 mt-3 text-right">Exibindo os últimos 150 registros.</p>
+                `;
+            } catch (err) {
+                container.innerHTML = `
+                    <div class="text-center text-red-500 py-8">
+                        <i class="fas fa-exclamation-triangle text-2xl mb-2 block"></i>
+                        Erro ao carregar histórico: ${err.message || err}
+                    </div>`;
+            }
+        }
+
+        function fecharHistorico() {
+            document.getElementById('modal-historico').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
