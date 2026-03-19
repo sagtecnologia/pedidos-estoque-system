@@ -216,23 +216,101 @@ async function generateProductCode(marca) {
 // FUNÇÕES DE SABORES
 // =====================================================
 
+function normalizarSabores(sabores = []) {
+    const saboresMap = new Map();
+
+    sabores.forEach(sabor => {
+        const nome = (sabor?.sabor || '').trim().toUpperCase();
+        if (!nome) return;
+
+        const quantidade = Number(sabor.quantidade) || 0;
+        const existente = saboresMap.get(nome);
+
+        if (existente) {
+            existente.quantidade += quantidade;
+            if (!existente.id && sabor.id) {
+                existente.id = sabor.id;
+            }
+            return;
+        }
+
+        saboresMap.set(nome, {
+            id: sabor.id || null,
+            sabor: nome,
+            quantidade
+        });
+    });
+
+    return Array.from(saboresMap.values());
+}
+
 // Buscar sabores de um produto
-async function getSaboresProduto(produtoId) {
+async function getSaboresProduto(produtoId, options = {}) {
     try {
+        const { includeInactive = false } = options;
         const { data, error } = await supabase
             .from('produto_sabores')
             .select('*')
             .eq('produto_id', produtoId)
-            .eq('ativo', true)
             .order('sabor');
 
         if (error) throw error;
-        return data || [];
+
+        const sabores = data || [];
+        return includeInactive ? sabores : sabores.filter(s => s.ativo === true);
         
     } catch (error) {
         handleError(error, 'Erro ao buscar sabores');
         return [];
     }
+}
+
+async function getProdutoInativoPorNomeEMarca(nome, marca) {
+    const { data, error } = await supabase
+        .from('produtos')
+        .select('*')
+        .eq('nome', nome)
+        .eq('marca', marca)
+        .eq('active', false)
+        .order('updated_at', { ascending: false })
+        .limit(1);
+
+    if (error) throw error;
+    return data?.[0] || null;
+}
+
+async function removerSaborProduto(saborId, produtoId) {
+    const { data, error } = await supabase.rpc('remover_sabor_produto', {
+        p_sabor_id: saborId,
+        p_produto_id: produtoId
+    });
+
+    if (error) throw error;
+
+    const resultado = Array.isArray(data) ? data[0] : data;
+    if (resultado && resultado.sucesso === false) {
+        throw new Error(resultado.mensagem || 'Não foi possível remover o sabor');
+    }
+
+    return resultado;
+}
+
+async function salvarSaborProduto(produtoId, sabor) {
+    const { data, error } = await supabase.rpc('salvar_produto_sabor', {
+        p_produto_id: produtoId,
+        p_sabor_id: sabor.id || null,
+        p_sabor: sabor.sabor,
+        p_quantidade: sabor.quantidade || 0
+    });
+
+    if (error) throw error;
+
+    const resultado = Array.isArray(data) ? data[0] : data;
+    if (resultado && resultado.sucesso === false) {
+        throw new Error(resultado.mensagem || 'Nao foi possivel salvar o sabor');
+    }
+
+    return resultado;
 }
 
 // Criar produto com sabores
@@ -241,6 +319,15 @@ async function createProdutoComSabores(produto, sabores) {
         showLoading(true);
         
         const user = await getCurrentUser();
+        const saboresNormalizados = normalizarSabores(sabores);
+        const produtoInativo = await getProdutoInativoPorNomeEMarca(produto.nome, produto.marca);
+
+        if (produtoInativo) {
+            return await updateProdutoComSabores(produtoInativo.id, {
+                ...produto,
+                active: true
+            }, saboresNormalizados);
+        }
         
         // Gerar código automático baseado na marca
         const codigo = await generateProductCode(produto.marca);
@@ -260,8 +347,8 @@ async function createProdutoComSabores(produto, sabores) {
         if (produtoError) throw produtoError;
 
         // 2. Criar sabores
-        if (sabores && sabores.length > 0) {
-            const saboresInsert = sabores.map(s => ({
+        if (saboresNormalizados.length > 0) {
+            const saboresInsert = saboresNormalizados.map(s => ({
                 produto_id: produtoData.id,
                 sabor: s.sabor,
                 quantidade: s.quantidade || 0,
@@ -290,6 +377,7 @@ async function createProdutoComSabores(produto, sabores) {
 async function updateProdutoComSabores(id, produto, sabores) {
     try {
         showLoading(true);
+        const saboresNormalizados = normalizarSabores(sabores);
 
         // 1. Atualizar produto
         const { data: produtoData, error: produtoError } = await supabase
@@ -302,47 +390,31 @@ async function updateProdutoComSabores(id, produto, sabores) {
         if (produtoError) throw produtoError;
 
         // 2. Buscar sabores existentes
-        const saboresExistentes = await getSaboresProduto(id);
-        const idsExistentes = saboresExistentes.map(s => s.id);
-        const idsRecebidos = sabores.filter(s => s.id).map(s => s.id);
+        const saboresExistentes = await getSaboresProduto(id, { includeInactive: true });
+        const saboresAtivos = saboresExistentes.filter(s => s.ativo === true);
+        const saboresExistentesPorNome = new Map(
+            saboresExistentes.map(s => [s.sabor.trim().toUpperCase(), s])
+        );
+        const saboresPreparados = saboresNormalizados.map(sabor => {
+            const saborExistente = saboresExistentesPorNome.get(sabor.sabor);
+            return saborExistente
+                ? { ...sabor, id: saborExistente.id }
+                : sabor;
+        });
+        const idsExistentes = saboresAtivos.map(s => s.id);
+        const idsRecebidos = saboresPreparados.filter(s => s.id).map(s => s.id);
 
         // 3. Desativar sabores removidos
         const idsRemovidos = idsExistentes.filter(id => !idsRecebidos.includes(id));
         if (idsRemovidos.length > 0) {
-            const { error: deleteError } = await supabase
-                .from('produto_sabores')
-                .update({ ativo: false })
-                .in('id', idsRemovidos);
-
-            if (deleteError) throw deleteError;
+            for (const saborId of idsRemovidos) {
+                await removerSaborProduto(saborId, id);
+            }
         }
 
         // 4. Atualizar e inserir sabores
-        for (const sabor of sabores) {
-            if (sabor.id) {
-                // Atualizar existente
-                const { error: updateError } = await supabase
-                    .from('produto_sabores')
-                    .update({
-                        sabor: sabor.sabor,
-                        quantidade: sabor.quantidade || 0
-                    })
-                    .eq('id', sabor.id);
-
-                if (updateError) throw updateError;
-            } else {
-                // Inserir novo
-                const { error: insertError } = await supabase
-                    .from('produto_sabores')
-                    .insert([{
-                        produto_id: id,
-                        sabor: sabor.sabor,
-                        quantidade: sabor.quantidade || 0,
-                        ativo: true
-                    }]);
-
-                if (insertError) throw insertError;
-            }
+        for (const sabor of saboresPreparados) {
+            await salvarSaborProduto(id, sabor);
         }
 
         showToast('Produto atualizado com sucesso!', 'success');

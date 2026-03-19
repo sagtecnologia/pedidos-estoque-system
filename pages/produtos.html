@@ -134,14 +134,16 @@
 
                 <!-- Sabores -->
                 <div class="border-t pt-4">
-                    <div class="flex justify-between items-center mb-3">
+                    <div class="mb-3">
                         <h4 class="text-md font-semibold text-gray-700">Sabores</h4>
-                        <button type="button" onclick="adicionarSabor()" class="px-3 py-1 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700">
-                            + Adicionar Sabor
-                        </button>
                     </div>
                     <div id="sabores-container" class="space-y-2">
                         <!-- Sabores serão adicionados aqui dinamicamente -->
+                    </div>
+                    <div class="mt-3">
+                        <button type="button" onclick="adicionarSabor()" class="px-3 py-1 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700">
+                            + Adicionar Sabor
+                        </button>
                     </div>
                     <p class="text-xs text-gray-500 mt-2">* Adicione os sabores disponíveis para este produto. O estoque será controlado individualmente por sabor.</p>
                 </div>
@@ -236,7 +238,7 @@
         }
 
         function coletarSabores() {
-            const sabores = [];
+            const saboresMap = new Map();
             const container = document.getElementById('sabores-container');
             const inputs = container.querySelectorAll('[name^="sabor-nome-"]');
             
@@ -247,15 +249,23 @@
                 const qtd = parseFloat(document.querySelector(`[name="sabor-qtd-${num}"]`).value) || 0;
                 
                 if (nome) {
-                    sabores.push({
-                        id: saborId,
-                        sabor: nome,
-                        quantidade: qtd
-                    });
+                    const existente = saboresMap.get(nome);
+                    if (existente) {
+                        existente.quantidade += qtd;
+                        if (!existente.id && saborId) {
+                            existente.id = saborId;
+                        }
+                    } else {
+                        saboresMap.set(nome, {
+                            id: saborId,
+                            sabor: nome,
+                            quantidade: qtd
+                        });
+                    }
                 }
             });
             
-            return sabores;
+            return Array.from(saboresMap.values());
         }
 
         async function loadCategorias() {

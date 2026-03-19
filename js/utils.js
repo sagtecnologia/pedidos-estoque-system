@@ -285,13 +285,22 @@ function handleError(error, customMessage = 'Ocorreu um erro') {
     
     // Email duplicado
     if (errorMessage.includes('duplicate key value violates unique constraint "users_email_key"') ||
-        errorMessage.includes('users_email_key') ||
-        errorMessage.includes('duplicate key')) {
+        errorMessage.includes('users_email_key')) {
         showToast('Este email já está cadastrado no sistema. Use outro email ou faça login.', 'error');
         return;
     }
     
     // Email já registrado (Supabase auth)
+    if (errorMessage.includes('duplicate key')) {
+        showToast('JÃ¡ existe um registro com este identificador. Revise os dados e tente novamente.', 'error');
+        return;
+    }
+
+    if (errorMessage.includes('produto_sabores_produto_id_sabor_key')) {
+        showToast('Este sabor ja existe para este produto, inclusive se ele foi removido anteriormente.', 'error');
+        return;
+    }
+
     if (errorMessage.includes('User already registered') || 
         errorMessage.includes('already registered')) {
         showToast('Este email já está cadastrado. Faça login ou use a opção "Esqueci minha senha".', 'error');
