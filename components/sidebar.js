@@ -70,6 +70,13 @@ function createSidebar() {
                         Estoque
                     </a>
 
+                    <a href="/pages/ajuste-estoque.html" id="menu-ajuste-estoque" class="sidebar-link group flex items-center px-4 py-3 text-sm font-medium rounded-md hover:bg-gray-700 transition">
+                        <svg class="mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path>
+                        </svg>
+                        Ajuste de Estoque
+                    </a>
+
                     <a href="/pages/pedidos.html" id="menu-compras" class="sidebar-link group flex items-center px-4 py-3 text-sm font-medium rounded-md hover:bg-gray-700 transition">
                         <svg class="mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
@@ -154,30 +161,30 @@ async function initSidebar() {
 
         // VENDEDOR: Só vê vendas e clientes
         if (role === 'VENDEDOR') {
-            // Esconder: produtos, fornecedores, usuários, aprovações de usuários, config empresa, estoque, compras, aprovações, análise
-            hideMenuItems(['menu-produtos', 'menu-fornecedores', 'menu-usuarios', 'menu-aprovacao-usuarios', 
-                          'menu-config-empresa', 'menu-estoque', 'menu-compras', 'menu-aprovacao', 'menu-analise']);
+            // Esconder: produtos, fornecedores, usuários, aprovações de usuários, config empresa, estoque, compras, aprovações, análise, ajuste-estoque
+            hideMenuItems(['menu-produtos', 'menu-fornecedores', 'menu-usuarios', 'menu-aprovacao-usuarios',
+                          'menu-config-empresa', 'menu-estoque', 'menu-ajuste-estoque', 'menu-compras', 'menu-aprovacao', 'menu-analise']);
         }
 
         // COMPRADOR: Só vê compras, estoque, produtos e fornecedores
         if (role === 'COMPRADOR') {
             // Esconder: vendas, clientes, usuários, aprovações de usuários, config empresa, aprovações, análise
-            hideMenuItems(['menu-vendas', 'menu-clientes', 'menu-usuarios', 'menu-aprovacao-usuarios', 
+            hideMenuItems(['menu-vendas', 'menu-clientes', 'menu-usuarios', 'menu-aprovacao-usuarios',
                           'menu-config-empresa', 'menu-aprovacao', 'menu-analise']);
         }
 
         // APROVADOR: Só vê aprovações
         if (role === 'APROVADOR') {
-            // Esconder: produtos, fornecedores, clientes, usuários, aprovações de usuários, config empresa, estoque, compras, vendas, análise
-            hideMenuItems(['menu-produtos', 'menu-fornecedores', 'menu-clientes', 'menu-usuarios', 
-                          'menu-aprovacao-usuarios', 'menu-config-empresa', 'menu-estoque', 
+            // Esconder: produtos, fornecedores, clientes, usuários, aprovações de usuários, config empresa, estoque, compras, vendas, análise, ajuste-estoque
+            hideMenuItems(['menu-produtos', 'menu-fornecedores', 'menu-clientes', 'menu-usuarios',
+                          'menu-aprovacao-usuarios', 'menu-config-empresa', 'menu-estoque', 'menu-ajuste-estoque',
                           'menu-compras', 'menu-vendas', 'menu-analise']);
         }
 
         // ADMIN: Vê tudo (não esconde nada)
         // Análise de Lucros e Reprocessar Estoque são exclusivos do ADMIN
         if (role !== 'ADMIN') {
-            hideMenuItems(['menu-analise', 'menu-reprocessar-estoque']);
+            hideMenuItems(['menu-analise', 'menu-reprocessar-estoque', 'menu-ajuste-estoque']);
         }
     }
 
