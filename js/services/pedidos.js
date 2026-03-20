@@ -327,25 +327,35 @@ async function finalizarPedido(pedidoId) {
         }
 
         // 🔒 VALIDAÇÃO DE SESSÃO ATIVA
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        let session = null;
+        const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
+        session = currentSession;
+        
+        // Se não tem sessão ou erro, tentar renovar
         if (sessionError || !session) {
-            showToast('❌ Sua sessão expirou! Faça login novamente.', 'error', 5000);
-            setTimeout(() => {
-                window.location.href = '/index.html';
-            }, 2000);
-            return false;
+            console.log('🔄 Sessão não encontrada em finalizarPedido, tentando renovar...');
+            const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+            session = refreshData?.session;
+            
+            if (refreshError || !session) {
+                showToast('❌ Sua sessão expirou! Faça login novamente.', 'error', 5000);
+                setTimeout(() => {
+                    window.location.href = '/index.html';
+                }, 2000);
+                return false;
+            }
+            console.log('✅ Sessão renovada com sucesso');
         }
 
-        // Verificar se o token ainda é válido
+        // Verificar se o token está próximo de expirar e renovar preventivamente
         const tokenExpiresAt = session.expires_at * 1000;
         const now = Date.now();
-        if (tokenExpiresAt <= now) {
-            showToast('❌ Sua sessão expirou! Faça login novamente.', 'error', 5000);
-            await supabase.auth.signOut();
-            setTimeout(() => {
-                window.location.href = '/index.html';
-            }, 2000);
-            return false;
+        if (tokenExpiresAt - now < 2 * 60 * 1000) {
+            console.log('🔄 Token expirando em breve, renovando...');
+            const { data: refreshData } = await supabase.auth.refreshSession();
+            if (refreshData?.session) {
+                session = refreshData.session;
+            }
         }
 
         // Verificar se o pedido já está finalizado

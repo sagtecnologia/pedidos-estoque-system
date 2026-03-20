@@ -149,10 +149,33 @@ function redirect(url) {
 
 // Verificar se está autenticado
 async function checkAuth() {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-        redirect('/index.html');
-        return null;
+    let session = null;
+    
+    // Tentar obter sessão atual
+    const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+    session = sessionData?.session;
+    
+    // Se não tem sessão ou houve erro, tentar renovar
+    if (!session || sessionError) {
+        console.log('🔄 Sessão não encontrada, tentando renovar...');
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        session = refreshData?.session;
+        
+        if (!session || refreshError) {
+            redirect('/index.html');
+            return null;
+        }
+        console.log('✅ Sessão renovada com sucesso');
+    }
+    
+    // Verificar se o token está próximo de expirar (margem de 2 minutos)
+    const expiresAt = session.expires_at * 1000;
+    const now = Date.now();
+    if (expiresAt - now < 2 * 60 * 1000) {
+        const { data: refreshData } = await supabase.auth.refreshSession();
+        if (refreshData?.session) {
+            session = refreshData.session;
+        }
     }
 
     // Verificar se o usuário está ativo na tabela users
@@ -184,8 +207,15 @@ async function checkAuth() {
 
 // Obter usuário atual
 async function getCurrentUser() {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) return null;
+    // Tentar obter sessão
+    let { data: { session } } = await supabase.auth.getSession();
+    
+    // Se não tem sessão, tentar renovar antes de desistir
+    if (!session) {
+        const { data: refreshData } = await supabase.auth.refreshSession();
+        session = refreshData?.session;
+        if (!session) return null;
+    }
 
     const { data: user, error } = await supabase
         .from('users')
@@ -199,6 +229,31 @@ async function getCurrentUser() {
     }
 
     return user;
+}
+
+// Garantir sessão válida antes de operações críticas
+// Retorna a sessão renovada ou null (com redirect para login)
+async function ensureValidSession() {
+    let { data: { session } } = await supabase.auth.getSession();
+    
+    if (!session) {
+        const { data: refreshData } = await supabase.auth.refreshSession();
+        session = refreshData?.session;
+    } else {
+        // Renovar preventivamente se estiver perto de expirar (3 min)
+        const expiresAt = session.expires_at * 1000;
+        if (expiresAt - Date.now() < 3 * 60 * 1000) {
+            const { data: refreshData } = await supabase.auth.refreshSession();
+            if (refreshData?.session) session = refreshData.session;
+        }
+    }
+    
+    if (!session) {
+        showToast('Sua sessão expirou. Faça login novamente.', 'warning', 3000);
+        setTimeout(() => { window.location.href = '/index.html'; }, 2000);
+        return null;
+    }
+    return session;
 }
 
 // Verificar permissão
@@ -282,6 +337,28 @@ function handleError(error, customMessage = 'Ocorreu um erro') {
     
     // Traduzir erros comuns para português
     let errorMessage = error.message || error;
+    
+    // Erros de autenticação/JWT - tentar renovar sessão automaticamente
+    if (errorMessage.includes('JWT') || 
+        errorMessage.includes('jwt') ||
+        errorMessage.includes('token') ||
+        errorMessage.includes('Token') ||
+        errorMessage.includes('refresh_token') ||
+        errorMessage.includes('not authenticated') ||
+        errorMessage.includes('invalid claim') ||
+        (error.code === 'PGRST301') ||
+        (error.status === 401)) {
+        console.log('🔄 Erro de autenticação detectado, tentando renovar sessão...');
+        supabase.auth.refreshSession().then(({ data, error: refreshError }) => {
+            if (refreshError || !data?.session) {
+                showToast('Sua sessão expirou. Redirecionando para login...', 'warning', 3000);
+                setTimeout(() => { window.location.href = '/index.html'; }, 2000);
+            } else {
+                showToast('Sessão renovada. Tente a operação novamente.', 'info', 3000);
+            }
+        });
+        return;
+    }
     
     // Email duplicado
     if (errorMessage.includes('duplicate key value violates unique constraint "users_email_key"') ||

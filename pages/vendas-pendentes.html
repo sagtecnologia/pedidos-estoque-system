@@ -370,6 +370,10 @@
             }
 
             try {
+                // Garantir sessão válida antes de registrar pagamento
+                const session = await ensureValidSession();
+                if (!session) return;
+
                 // Registrar pagamento
                 const { error: pagamentoError } = await supabase
                     .from('pagamentos')

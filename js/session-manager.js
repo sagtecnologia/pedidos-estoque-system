@@ -59,15 +59,60 @@ class SessionManager {
         // Iniciar temporizador
         this.resetInactivityTimer();
         
-        // Verificar sessão periodicamente (a cada minuto)
-        setInterval(() => this.checkSession(), 60 * 1000);
+        // Verificar sessão periodicamente (a cada 5 minutos)
+        setInterval(() => this.checkSession(), 5 * 60 * 1000);
         
         // Verificar se há sessão válida ao iniciar
         this.checkSession();
         
+        // Quando o usuário volta para a aba, renovar sessão proativamente
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                console.log('👁️  Aba visível novamente, verificando e renovando sessão...');
+                this.refreshSessionOnReturn();
+            }
+        });
+        
         // Log periódico de status (a cada 2 minutos) para debug
         if (this.debugMode) {
             setInterval(() => this.logStatus(), 2 * 60 * 1000);
+        }
+    }
+
+    // Quando o usuário volta para a aba, renovar a sessão
+    async refreshSessionOnReturn() {
+        try {
+            if (!window.supabase) return;
+            
+            const { data: { session } } = await window.supabase.auth.getSession();
+            if (!session) {
+                // Tentar renovar
+                const { data: refreshData, error } = await window.supabase.auth.refreshSession();
+                if (error || !refreshData?.session) {
+                    console.warn('⚠️  Não foi possível renovar sessão ao retornar à aba');
+                    await this.performLogout('sessao-invalida');
+                    return;
+                }
+                console.log('✅ Sessão renovada ao retornar à aba');
+            } else {
+                // Verificar se o token está perto de expirar
+                const expiresAt = session.expires_at * 1000;
+                const now = Date.now();
+                const cincoMinutos = 5 * 60 * 1000;
+                
+                if (expiresAt - now < cincoMinutos) {
+                    const { error } = await window.supabase.auth.refreshSession();
+                    if (!error) {
+                        console.log('✅ Token renovado preventivamente ao retornar à aba');
+                    }
+                }
+            }
+            
+            // Resetar timer de inatividade quando volta à aba
+            this.lastActivity = Date.now();
+            this.resetInactivityTimer();
+        } catch (error) {
+            console.error('Erro ao renovar sessão ao retornar:', error);
         }
     }
 
@@ -293,10 +338,6 @@ class SessionManager {
                 }
             }
             
-            // Limpar dados locais
-            localStorage.clear();
-            sessionStorage.clear();
-            
             // Redirecionar para login
             window.location.href = '/index.html';
             
@@ -314,20 +355,49 @@ class SessionManager {
             // Verificar se há sessão ativa no Supabase
             const { data: { session }, error } = await window.supabase.auth.getSession();
             
-            if (error || !session) {
-                console.warn('⚠️  Sessão inválida detectada, redirecionando para login...');
+            if (error) {
+                console.warn('⚠️  Erro ao verificar sessão, tentando renovar...');
+                const { data: refreshData, error: refreshError } = await window.supabase.auth.refreshSession();
+                if (refreshError || !refreshData.session) {
+                    console.warn('⚠️  Não foi possível renovar a sessão');
+                    await this.performLogout('sessao-invalida');
+                    return;
+                }
+                console.log('✅ Sessão renovada com sucesso após erro');
+                return;
+            }
+            
+            if (!session) {
+                console.warn('⚠️  Sem sessão ativa, redirecionando para login...');
                 await this.performLogout('sessao-invalida');
                 return;
             }
             
-            // Verificar se o token não está expirado
-            const expiresAt = session.expires_at * 1000; // Converter para milissegundos
+            // Verificar se o token está próximo de expirar (5 minutos de margem)
+            const expiresAt = session.expires_at * 1000;
             const now = Date.now();
+            const cincoMinutos = 5 * 60 * 1000;
             
             if (expiresAt <= now) {
-                console.warn('⚠️  Token expirado, redirecionando para login...');
-                await this.performLogout('token-expirado');
+                // Token já expirado - tentar renovar antes de deslogar
+                console.warn('⚠️  Token expirado, tentando renovar...');
+                const { data: refreshData, error: refreshError } = await window.supabase.auth.refreshSession();
+                if (refreshError || !refreshData.session) {
+                    console.warn('⚠️  Não foi possível renovar o token expirado');
+                    await this.performLogout('token-expirado');
+                    return;
+                }
+                console.log('✅ Token renovado com sucesso');
                 return;
+            } else if (expiresAt - now <= cincoMinutos) {
+                // Token prestes a expirar - renovar preventivamente
+                console.log('🔄 Token expirando em breve, renovando preventivamente...');
+                const { error: refreshError } = await window.supabase.auth.refreshSession();
+                if (refreshError) {
+                    console.warn('⚠️  Erro ao renovar preventivamente:', refreshError.message);
+                } else {
+                    console.log('✅ Token renovado preventivamente');
+                }
             }
             
             // Verificar se o usuário ainda está ativo no banco
@@ -483,8 +553,8 @@ function initSessionManager() {
     // Inicializar apenas uma vez
     if (!sessionManager) {
         sessionManager = new SessionManager({
-            inactivityTimeout: 15 * 60 * 1000, // 15 minutos
-            warningTime: 2 * 60 * 1000 // 2 minutos de aviso
+            inactivityTimeout: 30 * 60 * 1000, // 30 minutos
+            warningTime: 3 * 60 * 1000 // 3 minutos de aviso
         });
     }
 }

@@ -182,18 +182,12 @@ async function logout() {
             if (error) throw error;
         }
         
-        // Limpar qualquer dado local
-        localStorage.clear();
-        sessionStorage.clear();
-        
         showToast('Logout realizado com sucesso!', 'success');
         redirect('/index.html');
         
     } catch (error) {
         // Se for erro de sessão, apenas redirecionar
         if (error.message?.includes('session') || error.message?.includes('Session')) {
-            localStorage.clear();
-            sessionStorage.clear();
             redirect('/index.html');
         } else {
             handleError(error, 'Erro ao fazer logout');

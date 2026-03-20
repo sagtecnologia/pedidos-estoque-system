@@ -1731,6 +1731,10 @@
         }
 
         async function cancelarVendaHandler(novoStatus) {
+            // Garantir sessão válida antes de cancelar/reabrir
+            const sessionCheck = await ensureValidSession();
+            if (!sessionCheck) return;
+
             // ✅ VALIDAÇÃO ADICIONAL: Verificar se pode cancelar
             try {
                 const { data: validacao, error: erroValidacao } = await supabase
@@ -1756,6 +1760,10 @@
             
             showLoading(true);
             try {
+                // Garantir sessão válida antes de operações críticas
+                const session = await ensureValidSession();
+                if (!session) { showLoading(false); return; }
+
                 // ✅ USAR FUNÇÃO SQL COM PROTEÇÕES COMPLETAS
                 // A função cancelar_pedido_definitivo e reabrir_pedido_para_rascunho têm:
                 // - Validação de estoque ANTES de qualquer mudança

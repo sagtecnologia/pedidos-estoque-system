@@ -501,6 +501,8 @@
             console.log('Estado do checkbox:', conferido);
             
             try {
+                const session = await ensureValidSession();
+                if (!session) return;
                 const { data: { user } } = await supabase.auth.getUser();
                 
                 console.log('Atualizando item:', itemId, 'para conferido:', conferido);
@@ -582,6 +584,8 @@
             }
             
             try {
+                const session = await ensureValidSession();
+                if (!session) return;
                 const { data: { user } } = await supabase.auth.getUser();
                 
                 const { error } = await supabase.rpc('marcar_pedido_separado', {
@@ -752,6 +756,8 @@
             }
             
             try {
+                const session = await ensureValidSession();
+                if (!session) return;
                 const { data: { user } } = await supabase.auth.getUser();
                 const observacoes = document.getElementById('observacoes-despacho').value.trim();
                 
@@ -909,6 +915,8 @@
             }
             
             try {
+                const session = await ensureValidSession();
+                if (!session) return;
                 const { data: { user } } = await supabase.auth.getUser();
                 
                 const { error } = await supabase.rpc('voltar_para_separacao', {
@@ -935,6 +943,8 @@
             }
             
             try {
+                const session = await ensureValidSession();
+                if (!session) return;
                 const { data: { user } } = await supabase.auth.getUser();
                 
                 const { error } = await supabase.rpc('voltar_para_despacho', {
