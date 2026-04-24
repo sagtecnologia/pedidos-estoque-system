@@ -49,13 +49,7 @@ async function initNavbar() {
         
         if (userNameEl) userNameEl.textContent = user.full_name;
         if (userRoleEl) {
-            const roleLabels = {
-                'ADMIN': 'Administrador',
-                'COMPRADOR': 'Comprador',
-                'VENDEDOR': 'Vendedor',
-                'APROVADOR': 'Aprovador'
-            };
-            userRoleEl.textContent = roleLabels[user.role] || user.role;
+            userRoleEl.textContent = getRoleLabel(user.role);
         }
     }
 

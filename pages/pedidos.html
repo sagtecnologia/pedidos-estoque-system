@@ -21,7 +21,7 @@
                     </h2>
                     <p class="text-gray-600 mt-1">Gerenciamento de pedidos</p>
                 </div>
-                <button onclick="novoPedido()" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition">
+                <button id="btn-novo-pedido" onclick="novoPedido()" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition">
                     + Novo Pedido
                 </button>
             </div>
@@ -165,18 +165,19 @@
             // Restaurar filtros salvos ou definir data padrão
             const filtrosSalvos = filtroPedidos.recuperarFiltros();
             const hoje = new Date().toISOString().split('T')[0];
+            const dataPadrao = isRestrictedCommercialRole(currentUser) ? '' : hoje;
             
             if (filtrosSalvos) {
                 // Restaurar filtros salvos
                 document.getElementById('filter-status').value = filtrosSalvos.status || '';
                 document.getElementById('filter-fornecedor').value = filtrosSalvos.fornecedor || '';
                 document.getElementById('search').value = filtrosSalvos.search || '';
-                document.getElementById('filter-data-inicio').value = filtrosSalvos.dataInicio || hoje;
-                document.getElementById('filter-data-fim').value = filtrosSalvos.dataFim || hoje;
+                document.getElementById('filter-data-inicio').value = filtrosSalvos.dataInicio || dataPadrao;
+                document.getElementById('filter-data-fim').value = filtrosSalvos.dataFim || dataPadrao;
             } else {
                 // Definir data padrão (dia atual)
-                document.getElementById('filter-data-inicio').value = hoje;
-                document.getElementById('filter-data-fim').value = hoje;
+                document.getElementById('filter-data-inicio').value = dataPadrao;
+                document.getElementById('filter-data-fim').value = dataPadrao;
             }
             
             await loadFornecedoresSelect();
@@ -283,7 +284,7 @@
             if (pedidos.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="8" class="px-6 py-4 text-center text-gray-500">Nenhum pedido encontrado</td></tr>';
                 document.getElementById('total-quantidade').textContent = '0';
-                document.getElementById('total-valor').textContent = 'R$ 0,00';
+                document.getElementById('total-valor').textContent = formatMaskedCurrency(0, currentUser);
                 return;
             }
 
@@ -304,7 +305,7 @@
                     <td class="px-6 py-4 text-sm text-gray-600">${p.solicitante?.full_name || 'N/A'}</td>
                     <td class="px-6 py-4 text-sm text-gray-600">${p.fornecedor?.nome || '-'}</td>
                     <td class="px-6 py-4 text-sm text-gray-600">${Math.round(quantidadeTotal)}</td>
-                    <td class="px-6 py-4 text-sm text-gray-900">${formatCurrency(p.total)}</td>
+                    <td class="px-6 py-4 text-sm text-gray-900">${formatMaskedCurrency(p.total, currentUser)}</td>
                     <td class="px-6 py-4 text-sm">${getStatusBadge(p.status)}</td>
                     <td class="px-6 py-4 text-sm text-gray-600">${formatDate(p.created_at)}</td>
                     <td class="px-6 py-4 text-sm space-x-2">
@@ -316,17 +317,18 @@
 
             // Atualizar totais no rodapé
             document.getElementById('total-quantidade').textContent = Math.round(somaQuantidade);
-            document.getElementById('total-valor').textContent = formatCurrency(somaValor);
+            document.getElementById('total-valor').textContent = formatMaskedCurrency(somaValor, currentUser);
         }
         
         // Limpar filtros
         function limparFiltros() {
             const hoje = new Date().toISOString().split('T')[0];
+            const dataPadrao = isRestrictedCommercialRole(currentUser) ? '' : hoje;
             document.getElementById('filter-status').value = '';
             document.getElementById('filter-fornecedor').value = '';
             document.getElementById('search').value = '';
-            document.getElementById('filter-data-inicio').value = hoje;
-            document.getElementById('filter-data-fim').value = hoje;
+            document.getElementById('filter-data-inicio').value = dataPadrao;
+            document.getElementById('filter-data-fim').value = dataPadrao;
             
             // Limpar filtros salvos
             filtroPedidos.limparFiltros();
@@ -340,7 +342,7 @@
 
         document.getElementById('form-novo-pedido').addEventListener('submit', async (e) => {
             e.preventDefault();
-            
+
             try {
                 showLoading(true);
                 const pedido = {

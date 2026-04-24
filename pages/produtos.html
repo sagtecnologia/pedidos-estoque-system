@@ -21,7 +21,7 @@
                     </h2>
                     <p class="text-gray-600 mt-1">Gerenciamento de produtos</p>
                 </div>
-                <button onclick="openModal('modal-produto')" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition">
+                <button id="btn-novo-produto" onclick="openModal('modal-produto')" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition">
                     + Novo Produto
                 </button>
             </div>
@@ -173,16 +173,30 @@
     <script>
         let editingId = null;
         let saboresCount = 0;
+        let currentUser = null;
 
         (async () => {
             await checkAuth();
+            currentUser = await getCurrentUser();
             document.getElementById('navbar').innerHTML = createNavbar();
             document.getElementById('sidebar-container').innerHTML = createSidebar();
             await initNavbar();
             await initSidebar();
+            applyRoleRestrictions();
             await loadProdutos();
             await loadCategorias();
         })();
+
+        function applyRoleRestrictions() {
+            if (!isRestrictedCommercialRole(currentUser)) {
+                return;
+            }
+
+            const btnNovoProduto = document.getElementById('btn-novo-produto');
+            if (btnNovoProduto) {
+                btnNovoProduto.classList.add('hidden');
+            }
+        }
 
         // Gerenciamento de Sabores
         function adicionarSabor(sabor = '', quantidade = 0, saborId = null) {
@@ -303,12 +317,16 @@
                         ${p.estoque_atual <= p.estoque_minimo ? '<span class="text-xs">(Baixo)</span>' : ''}
                     </td>
                     <td class="px-6 py-4">
-                        <div class="text-sm text-gray-600">Compra: ${formatCurrency(p.preco_compra || p.preco || 0)}</div>
+                        <div class="text-sm text-gray-600">Compra: ${formatMaskedCurrency(p.preco_compra || p.preco || 0, currentUser)}</div>
                         <div class="text-sm font-medium text-gray-900">Venda: ${formatCurrency(p.preco_venda || p.preco || 0)}</div>
                     </td>
                     <td class="px-6 py-4 text-sm space-x-2">
-                        <button onclick="editProduto('${p.id}')" class="text-blue-600 hover:text-blue-800">Editar</button>
-                        <button onclick="deleteProdutoHandler('${p.id}')" class="text-red-600 hover:text-red-800">Excluir</button>
+                        ${isRestrictedCommercialRole(currentUser)
+                            ? '-'
+                            : `
+                                <button onclick="editProduto('${p.id}')" class="text-blue-600 hover:text-blue-800">Editar</button>
+                                <button onclick="deleteProdutoHandler('${p.id}')" class="text-red-600 hover:text-red-800">Excluir</button>
+                            `}
                     </td>
                 </tr>
             `).join('');
@@ -316,6 +334,11 @@
 
         document.getElementById('form-produto').addEventListener('submit', async (e) => {
             e.preventDefault();
+
+            if (isRestrictedCommercialRole(currentUser)) {
+                showToast('Seu perfil possui acesso somente para consulta de produtos.', 'warning');
+                return;
+            }
             
             const precoCompra = parseFloat(document.getElementById('produto-preco-compra').value) || 0;
             const precoVenda = parseFloat(document.getElementById('produto-preco-venda').value) || 0;
@@ -353,6 +376,11 @@
         });
 
         async function editProduto(id) {
+            if (isRestrictedCommercialRole(currentUser)) {
+                showToast('Seu perfil possui acesso somente para consulta de produtos.', 'warning');
+                return;
+            }
+
             const produto = await getProduto(id);
             if (!produto) return;
 
@@ -379,12 +407,22 @@
         }
 
         async function deleteProdutoHandler(id) {
+            if (isRestrictedCommercialRole(currentUser)) {
+                showToast('Seu perfil possui acesso somente para consulta de produtos.', 'warning');
+                return;
+            }
+
             const success = await deleteProduto(id);
             if (success) await loadProdutos();
         }
 
         // Calcular margem de lucro
         function calcularMargem() {
+            if (isRestrictedCommercialRole(currentUser)) {
+                document.getElementById('margem-lucro-container').style.display = 'none';
+                return;
+            }
+
             const precoCompra = parseFloat(document.getElementById('produto-preco-compra').value) || 0;
             const precoVenda = parseFloat(document.getElementById('produto-preco-venda').value) || 0;
             

@@ -157,18 +157,19 @@
             // Restaurar filtros salvos ou definir data padrão
             const filtrosSalvos = filtroVendas.recuperarFiltros();
             const hoje = new Date().toISOString().split('T')[0];
+            const dataPadrao = isRestrictedCommercialRole(currentUser) ? '' : hoje;
             
             if (filtrosSalvos) {
                 // Restaurar filtros salvos
                 document.getElementById('filter-status').value = filtrosSalvos.status || '';
                 document.getElementById('filter-cliente').value = filtrosSalvos.cliente || '';
                 document.getElementById('search').value = filtrosSalvos.search || '';
-                document.getElementById('filter-data-inicio').value = filtrosSalvos.dataInicio || hoje;
-                document.getElementById('filter-data-fim').value = filtrosSalvos.dataFim || hoje;
+                document.getElementById('filter-data-inicio').value = filtrosSalvos.dataInicio || dataPadrao;
+                document.getElementById('filter-data-fim').value = filtrosSalvos.dataFim || dataPadrao;
             } else {
                 // Definir data padrão (dia atual)
-                document.getElementById('filter-data-inicio').value = hoje;
-                document.getElementById('filter-data-fim').value = hoje;
+                document.getElementById('filter-data-inicio').value = dataPadrao;
+                document.getElementById('filter-data-fim').value = dataPadrao;
             }
             
             await loadClientesSelect();
@@ -274,11 +275,12 @@
         // Limpar filtros
         function limparFiltros() {
             const hoje = new Date().toISOString().split('T')[0];
+            const dataPadrao = isRestrictedCommercialRole(currentUser) ? '' : hoje;
             document.getElementById('filter-status').value = '';
             document.getElementById('filter-cliente').value = '';
             document.getElementById('search').value = '';
-            document.getElementById('filter-data-inicio').value = hoje;
-            document.getElementById('filter-data-fim').value = hoje;
+            document.getElementById('filter-data-inicio').value = dataPadrao;
+            document.getElementById('filter-data-fim').value = dataPadrao;
             
             // Limpar filtros salvos
             filtroVendas.limparFiltros();

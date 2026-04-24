@@ -22,7 +22,7 @@
                         <h2 id="venda-numero" class="text-3xl font-bold text-gray-900">Venda</h2>
                         <p id="venda-status" class="text-gray-600 mt-1"></p>
                     </div>
-                    <div id="acoes-venda" class="space-x-2"></div>
+                    <div id="acoes-venda" class="flex flex-wrap justify-end gap-2"></div>
                 </div>
             </div>
 
@@ -1069,6 +1069,7 @@
 
         async function renderItens() {
             const tbody = document.getElementById('itens-tbody');
+            const bloquearFinanceiro = isRestrictedCommercialRole(currentUser);
             
             // Controlar visibilidade da coluna de estoque
             const thEstoque = document.getElementById('th-estoque');
@@ -1158,6 +1159,12 @@
             document.getElementById('venda-custo-total').textContent = formatCurrency(custoTotal);
             document.getElementById('venda-margem-lucro').textContent = formatCurrency(margemLucro);
             document.getElementById('venda-margem-percentual').textContent = `${margemPercentual.toFixed(1)}%`;
+
+            if (bloquearFinanceiro) {
+                document.getElementById('venda-custo-total').textContent = '*****';
+                document.getElementById('venda-margem-lucro').textContent = '*****';
+                document.getElementById('venda-margem-percentual').textContent = '*****';
+            }
             
             // Buscar estoque atual para cada item
             const itensComEstoque = await Promise.all(itens.map(async (item) => {
@@ -1280,9 +1287,11 @@
                 botoes.push('<button onclick="enviarPDFWhatsAppHandler()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">📱 Enviar WhatsApp</button>');
             }
             
-            const podeEditar = venda.status === 'RASCUNHO' && venda.solicitante.id === currentUser.id;
+            const isAdmin = currentUser?.role === 'ADMIN';
+            const isSolicitanteDaVenda = venda.solicitante_id === currentUser?.id;
+            const podeEditar = venda.status === 'RASCUNHO' && (isSolicitanteDaVenda || isAdmin);
             // Permite finalizar vendas em RASCUNHO (novo fluxo) ou APROVADO (pedidos antigos já aprovados)
-            const podeFinalizar = ['RASCUNHO', 'APROVADO'].includes(venda.status) && ['ADMIN', 'VENDEDOR'].includes(currentUser.role);
+            const podeFinalizar = ['RASCUNHO', 'APROVADO'].includes(venda.status) && ['ADMIN', 'VENDEDOR', 'COMERCIAL'].includes(currentUser.role);
             
             if (podeEditar) {
                 document.getElementById('btn-add-item').style.display = 'block';
@@ -1310,7 +1319,7 @@
             }
             
             // Botão para registrar pagamento (vendas finalizadas com saldo pendente)
-            if (venda.status === 'FINALIZADO' && venda.pagamento_status !== 'PAGO' && ['ADMIN', 'VENDEDOR'].includes(currentUser.role)) {
+            if (venda.status === 'FINALIZADO' && venda.pagamento_status !== 'PAGO' && ['ADMIN', 'VENDEDOR', 'COMERCIAL'].includes(currentUser.role)) {
                 const pendente = (venda.total || 0) - (venda.valor_pago || 0);
                 if (pendente > 0) {
                     botoes.push(`<button onclick="abrirModalPagamento()" class="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700">💰 Registrar Pagamento</button>`);
@@ -1651,6 +1660,11 @@
         let pendingCancelacao = null;
 
         function abrirConfirmacaoCancelamento(novoStatus) {
+            if (!canCancelVenda(currentUser)) {
+                showToast('Seu perfil nÃ£o pode cancelar vendas.', 'error');
+                closeModal('modal-cancelar');
+                return;
+            }
             // VALIDAÇÃO: Impedir cancelamento de vendas já canceladas ou em rascunho
             if (venda.status === 'CANCELADO') {
                 showToast('❌ BLOQUEIO: Esta venda já foi cancelada anteriormente! Cancelamentos duplos não são permitidos.', 'error');
@@ -1731,6 +1745,11 @@
         }
 
         async function cancelarVendaHandler(novoStatus) {
+            if (!canCancelVenda(currentUser)) {
+                showToast('Seu perfil nÃ£o pode cancelar vendas.', 'error');
+                return;
+            }
+
             // Garantir sessão válida antes de cancelar/reabrir
             const sessionCheck = await ensureValidSession();
             if (!sessionCheck) return;

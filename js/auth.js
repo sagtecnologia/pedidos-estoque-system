@@ -37,7 +37,7 @@ async function login(email, password) {
         }
 
         showToast('Login realizado com sucesso!', 'success');
-        redirect('/pages/dashboard.html');
+        redirect(getDefaultRouteForUser(userData));
         
     } catch (error) {
         handleError(error, 'Erro ao fazer login');

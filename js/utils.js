@@ -76,6 +76,87 @@ function formatCurrency(value) {
     }).format(value);
 }
 
+const ROLE_LABELS = Object.freeze({
+    'ADMIN': 'Administrador',
+    'COMPRADOR': 'Comprador',
+    'VENDEDOR': 'Vendedor',
+    'APROVADOR': 'Aprovador',
+    'COMERCIAL': 'Comercial'
+});
+
+const COMMERCIAL_ALLOWED_PATHS = Object.freeze([
+    '/pages/clientes.html',
+    '/pages/produtos.html',
+    '/pages/pedidos.html',
+    '/pages/pedido-detalhe.html',
+    '/pages/vendas.html',
+    '/pages/venda-detalhe.html',
+    '/pages/pre-pedidos.html'
+]);
+
+function getRoleValue(userOrRole) {
+    if (!userOrRole) return null;
+    return typeof userOrRole === 'string' ? userOrRole : userOrRole.role;
+}
+
+function getRoleLabel(role) {
+    return ROLE_LABELS[role] || role;
+}
+
+function isRestrictedCommercialRole(userOrRole) {
+    return getRoleValue(userOrRole) === 'COMERCIAL';
+}
+
+function canViewPurchasePrices(userOrRole) {
+    return !isRestrictedCommercialRole(userOrRole);
+}
+
+function canViewProfitValues(userOrRole) {
+    return !isRestrictedCommercialRole(userOrRole);
+}
+
+function canCancelVenda(userOrRole) {
+    return getRoleValue(userOrRole) === 'ADMIN';
+}
+
+function getDefaultRouteForUser(userOrRole) {
+    return isRestrictedCommercialRole(userOrRole)
+        ? '/pages/vendas.html'
+        : '/pages/dashboard.html';
+}
+
+function canAccessPath(userOrRole, pathname = window.location.pathname) {
+    if (!isRestrictedCommercialRole(userOrRole)) {
+        return true;
+    }
+
+    return COMMERCIAL_ALLOWED_PATHS.includes(pathname);
+}
+
+function formatMaskedCurrency(value, userOrRole, mask = '*****') {
+    return isRestrictedCommercialRole(userOrRole)
+        ? mask
+        : formatCurrency(value || 0);
+}
+
+function formatMaskedPercentage(value, userOrRole, decimals = 1, mask = '*****') {
+    if (isRestrictedCommercialRole(userOrRole)) {
+        return mask;
+    }
+
+    return `${Number(value || 0).toFixed(decimals)}%`;
+}
+
+function redirectAndHalt(url, delayMs = 0) {
+    if (delayMs > 0) {
+        setTimeout(() => redirect(url), delayMs);
+    } else {
+        redirect(url);
+    }
+
+    return new Promise(() => {});
+}
+
 // Formatar data
 function formatDate(date) {
     return new Intl.DateTimeFormat('pt-BR', {
@@ -162,8 +243,7 @@ async function checkAuth() {
         session = refreshData?.session;
         
         if (!session || refreshError) {
-            redirect('/index.html');
-            return null;
+            return redirectAndHalt('/index.html');
         }
         console.log('✅ Sessão renovada com sucesso');
     }
@@ -181,25 +261,26 @@ async function checkAuth() {
     // Verificar se o usuário está ativo na tabela users
     const { data: userData, error } = await supabase
         .from('users')
-        .select('active')
+        .select('active, role')
         .eq('id', session.user.id)
         .single();
 
     if (error) {
         console.error('Erro ao verificar status do usuário:', error);
         await supabase.auth.signOut();
-        redirect('/index.html');
-        return null;
+        return redirectAndHalt('/index.html');
     }
 
     // Se o usuário não estiver ativo, fazer logout e redirecionar
     if (!userData.active) {
         await supabase.auth.signOut();
         showToast('⏳ Sua conta está aguardando aprovação do administrador. Você será notificado quando for aprovada.', 'warning', 6000);
-        setTimeout(() => {
-            redirect('/index.html');
-        }, 2000);
-        return null;
+        return redirectAndHalt('/index.html', 2000);
+    }
+
+    if (!canAccessPath(userData)) {
+        showToast('Acesso negado para o seu perfil.', 'error');
+        return redirectAndHalt(getDefaultRouteForUser(userData), 1200);
     }
 
     return session;

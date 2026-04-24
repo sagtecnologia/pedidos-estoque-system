@@ -183,7 +183,7 @@
             currentUser = await getCurrentUser();
             
             // Verificar permissões
-            if (!['VENDEDOR', 'APROVADOR', 'ADMIN'].includes(currentUser.role)) {
+            if (!['VENDEDOR', 'COMERCIAL', 'APROVADOR', 'ADMIN'].includes(currentUser.role)) {
                 showToast('Acesso negado', 'error');
                 redirect('/pages/dashboard.html');
                 return;

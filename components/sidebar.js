@@ -6,7 +6,7 @@ function createSidebar() {
     return `
         <aside id="sidebar" class="sidebar fixed top-16 left-0 h-full w-64 bg-gray-800 text-white z-30 overflow-y-auto pb-20">
             <nav class="mt-5 px-2">
-                <a href="/pages/dashboard.html" class="sidebar-link group flex items-center px-4 py-3 text-sm font-medium rounded-md hover:bg-gray-700 transition mb-1">
+                <a href="/pages/dashboard.html" id="menu-dashboard" class="sidebar-link group flex items-center px-4 py-3 text-sm font-medium rounded-md hover:bg-gray-700 transition mb-1">
                     <svg class="mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
                     </svg>
@@ -183,6 +183,12 @@ async function initSidebar() {
 
         // ADMIN: Vê tudo (não esconde nada)
         // Análise de Lucros e Reprocessar Estoque são exclusivos do ADMIN
+        if (role === 'COMERCIAL') {
+            hideMenuItems(['menu-dashboard', 'menu-fornecedores', 'menu-usuarios', 'menu-aprovacao-usuarios',
+                          'menu-config-empresa', 'menu-estoque', 'menu-ajuste-estoque', 'menu-vendas-pendentes',
+                          'menu-conferencia', 'menu-aprovacao', 'menu-analise', 'menu-reprocessar-estoque']);
+        }
+
         if (role !== 'ADMIN') {
             hideMenuItems(['menu-analise', 'menu-reprocessar-estoque', 'menu-ajuste-estoque']);
         }

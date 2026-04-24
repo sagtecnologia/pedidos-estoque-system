@@ -100,7 +100,8 @@
             // Redirecionar se já estiver autenticado
             const { data: { session } } = await supabase.auth.getSession();
             if (session) {
-                redirect('/pages/dashboard.html');
+                const user = await getCurrentUser();
+                redirect(getDefaultRouteForUser(user));
             }
         })();
 
