@@ -199,15 +199,15 @@
         }
 
         // Gerenciamento de Sabores
-        function adicionarSabor(sabor = '', quantidade = 0, saborId = null) {
+        function adicionarSabor(sabor = '', quantidade = 0, saborId = null, codigoBarras = '') {
             saboresCount++;
             const container = document.getElementById('sabores-container');
             const div = document.createElement('div');
-            div.className = 'flex gap-2 items-center bg-gray-50 p-3 rounded-lg';
+            div.className = 'grid grid-cols-1 md:grid-cols-[1fr_180px_128px_auto] gap-2 items-center bg-gray-50 p-3 rounded-lg';
             div.id = `sabor-${saboresCount}`;
             div.innerHTML = `
                 <input type="hidden" name="sabor-id-${saboresCount}" value="${saborId || ''}">
-                <div class="flex-1">
+                <div>
                     <input 
                         type="text" 
                         name="sabor-nome-${saboresCount}" 
@@ -217,7 +217,16 @@
                         required
                     >
                 </div>
-                <div class="w-32">
+                <div>
+                    <input
+                        type="text"
+                        name="sabor-codigo-barras-${saboresCount}"
+                        value="${codigoBarras || ''}"
+                        placeholder="Codigo de barras"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                    >
+                </div>
+                <div>
                     <input 
                         type="number" 
                         name="sabor-qtd-${saboresCount}" 
@@ -261,6 +270,7 @@
                 const saborId = document.querySelector(`[name="sabor-id-${num}"]`).value || null;
                 const nome = input.value.trim().toUpperCase();
                 const qtd = parseFloat(document.querySelector(`[name="sabor-qtd-${num}"]`).value) || 0;
+                const codigoBarras = document.querySelector(`[name="sabor-codigo-barras-${num}"]`).value.trim() || null;
                 
                 if (nome) {
                     const existente = saboresMap.get(nome);
@@ -269,11 +279,15 @@
                         if (!existente.id && saborId) {
                             existente.id = saborId;
                         }
+                        if (!existente.codigo_barras && codigoBarras) {
+                            existente.codigo_barras = codigoBarras;
+                        }
                     } else {
                         saboresMap.set(nome, {
                             id: saborId,
                             sabor: nome,
-                            quantidade: qtd
+                            quantidade: qtd,
+                            codigo_barras: codigoBarras
                         });
                     }
                 }
@@ -399,7 +413,7 @@
             limparSabores();
             const sabores = await getSaboresProduto(id);
             if (sabores && sabores.length > 0) {
-                sabores.forEach(s => adicionarSabor(s.sabor, s.quantidade, s.id));
+                sabores.forEach(s => adicionarSabor(s.sabor, s.quantidade, s.id, s.codigo_barras || ''));
             }
             
             calcularMargem();

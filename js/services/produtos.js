@@ -224,6 +224,7 @@ function normalizarSabores(sabores = []) {
         if (!nome) return;
 
         const quantidade = Number(sabor.quantidade) || 0;
+        const codigoBarras = (sabor.codigo_barras || '').trim() || null;
         const existente = saboresMap.get(nome);
 
         if (existente) {
@@ -231,13 +232,17 @@ function normalizarSabores(sabores = []) {
             if (!existente.id && sabor.id) {
                 existente.id = sabor.id;
             }
+            if (!existente.codigo_barras && codigoBarras) {
+                existente.codigo_barras = codigoBarras;
+            }
             return;
         }
 
         saboresMap.set(nome, {
             id: sabor.id || null,
             sabor: nome,
-            quantidade
+            quantidade,
+            codigo_barras: codigoBarras
         });
     });
 
@@ -300,7 +305,8 @@ async function salvarSaborProduto(produtoId, sabor) {
         p_produto_id: produtoId,
         p_sabor_id: sabor.id || null,
         p_sabor: sabor.sabor,
-        p_quantidade: sabor.quantidade || 0
+        p_quantidade: sabor.quantidade || 0,
+        p_codigo_barras: sabor.codigo_barras || null
     });
 
     if (error) throw error;
@@ -311,6 +317,41 @@ async function salvarSaborProduto(produtoId, sabor) {
     }
 
     return resultado;
+}
+
+async function buscarSaborPorCodigoBarras(codigoBarras) {
+    const codigo = (codigoBarras || '').trim();
+    if (!codigo) return null;
+
+    const { data, error } = await supabase
+        .from('produto_sabores')
+        .select(`
+            id,
+            produto_id,
+            sabor,
+            quantidade,
+            codigo_barras,
+            ativo,
+            produto:produtos (
+                id,
+                codigo,
+                nome,
+                marca,
+                preco,
+                preco_venda,
+                preco_compra,
+                active
+            )
+        `)
+        .eq('codigo_barras', codigo)
+        .eq('ativo', true)
+        .limit(1)
+        .maybeSingle();
+
+    if (error) throw error;
+    if (!data || data.produto?.active === false) return null;
+
+    return data;
 }
 
 // Criar produto com sabores

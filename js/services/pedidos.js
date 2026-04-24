@@ -177,6 +177,17 @@ async function addItemPedido(pedidoId, item) {
     }
 }
 
+async function addItemVendaPorCodigoBarras(pedidoId, codigoBarras, quantidade = 1) {
+    const { data, error } = await supabase.rpc('adicionar_item_venda_codigo_barras', {
+        p_pedido_id: pedidoId,
+        p_codigo_barras: codigoBarras,
+        p_quantidade: quantidade
+    });
+
+    if (error) throw error;
+    return Array.isArray(data) ? data[0] : data;
+}
+
 // Remover item do pedido
 async function removeItemPedido(itemId) {
     try {

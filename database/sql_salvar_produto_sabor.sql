@@ -3,11 +3,21 @@
 -- Proposito: criar, atualizar ou reativar sabor de produto com bypass controlado de RLS
 -- =====================================================
 
+ALTER TABLE public.produto_sabores
+ADD COLUMN IF NOT EXISTS codigo_barras varchar(50);
+
+CREATE UNIQUE INDEX IF NOT EXISTS produto_sabores_codigo_barras_key
+ON public.produto_sabores (codigo_barras)
+WHERE codigo_barras IS NOT NULL AND codigo_barras <> '';
+
+DROP FUNCTION IF EXISTS public.salvar_produto_sabor(uuid, uuid, character varying, numeric);
+
 CREATE OR REPLACE FUNCTION public.salvar_produto_sabor(
     p_produto_id uuid,
     p_sabor_id uuid DEFAULT NULL,
     p_sabor character varying DEFAULT NULL,
-    p_quantidade numeric DEFAULT 0
+    p_quantidade numeric DEFAULT 0,
+    p_codigo_barras character varying DEFAULT NULL
 )
 RETURNS TABLE(sucesso boolean, mensagem text, sabor_id uuid)
 LANGUAGE plpgsql
@@ -48,6 +58,7 @@ BEGIN
         UPDATE public.produto_sabores
            SET sabor = v_sabor_normalizado,
                quantidade = COALESCE(p_quantidade, 0),
+               codigo_barras = NULLIF(TRIM(COALESCE(p_codigo_barras, '')), ''),
                ativo = true,
                updated_at = now()
          WHERE id = p_sabor_id
@@ -68,6 +79,7 @@ BEGIN
         UPDATE public.produto_sabores
            SET sabor = v_sabor_normalizado,
                quantidade = COALESCE(p_quantidade, 0),
+               codigo_barras = NULLIF(TRIM(COALESCE(p_codigo_barras, '')), ''),
                ativo = true,
                updated_at = now()
          WHERE id = v_sabor_existente_id;
@@ -80,6 +92,7 @@ BEGIN
         produto_id,
         sabor,
         quantidade,
+        codigo_barras,
         ativo,
         created_at,
         updated_at
@@ -87,6 +100,7 @@ BEGIN
         p_produto_id,
         v_sabor_normalizado,
         COALESCE(p_quantidade, 0),
+        NULLIF(TRIM(COALESCE(p_codigo_barras, '')), ''),
         true,
         now(),
         now()
@@ -97,5 +111,5 @@ BEGIN
 END;
 $function$;
 
-GRANT EXECUTE ON FUNCTION public.salvar_produto_sabor(uuid, uuid, character varying, numeric) TO authenticated;
-GRANT EXECUTE ON FUNCTION public.salvar_produto_sabor(uuid, uuid, character varying, numeric) TO service_role;
+GRANT EXECUTE ON FUNCTION public.salvar_produto_sabor(uuid, uuid, character varying, numeric, character varying) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.salvar_produto_sabor(uuid, uuid, character varying, numeric, character varying) TO service_role;

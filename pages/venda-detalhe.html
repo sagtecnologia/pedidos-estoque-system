@@ -37,7 +37,7 @@
                                 <button id="btn-alterar-preco-lote" onclick="abrirModalAlterarPrecoLote()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 text-sm" style="display: none;">
                                     💰 Alterar Preço em Lote
                                 </button>
-                                <button id="btn-add-item" onclick="openModal('modal-item')" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 text-sm">
+                                <button id="btn-add-item" onclick="abrirModalItem()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 text-sm">
                                     + Adicionar Item
                                 </button>
                             </div>
@@ -319,6 +319,42 @@
                 </button>
             </div>
             <div class="px-6 py-4">
+                <!-- Leitura por Codigo de Barras -->
+                <div class="mb-4 pb-4 border-b">
+                    <h4 class="font-semibold text-gray-900 mb-3">Adicionar por Codigo de Barras</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-[1fr_120px_auto] gap-3 items-end">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Codigo do sabor</label>
+                            <input
+                                type="text"
+                                id="barcode-sabor"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                                placeholder="Leia ou digite o codigo de barras"
+                                autocomplete="off"
+                            >
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Qtd</label>
+                            <input
+                                type="number"
+                                id="barcode-quantidade"
+                                value="1"
+                                step="1"
+                                min="1"
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500"
+                            >
+                        </div>
+                        <button
+                            type="button"
+                            onclick="adicionarItemPorCodigoBarras()"
+                            class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 whitespace-nowrap"
+                        >
+                            Adicionar
+                        </button>
+                    </div>
+                    <p id="barcode-feedback" class="text-sm text-gray-600 mt-2 hidden"></p>
+                </div>
+
                 <!-- Seleção de Marca e Produto -->
                 <div class="grid grid-cols-2 gap-4 mb-4 pb-4 border-b">
                     <div>
@@ -606,7 +642,88 @@
             
             await loadVenda();
             await loadMarcasSelect();
+            configurarLeitorCodigoBarras();
         })();
+
+        function configurarLeitorCodigoBarras() {
+            const input = document.getElementById('barcode-sabor');
+            if (!input) return;
+
+            input.addEventListener('keydown', async (event) => {
+                if (event.key !== 'Enter') return;
+                event.preventDefault();
+                await adicionarItemPorCodigoBarras();
+            });
+        }
+
+        function abrirModalItem() {
+            openModal('modal-item');
+            setTimeout(() => {
+                const input = document.getElementById('barcode-sabor');
+                if (input) input.focus();
+            }, 100);
+        }
+
+        function atualizarFeedbackCodigoBarras(mensagem, tipo = 'info') {
+            const feedback = document.getElementById('barcode-feedback');
+            if (!feedback) return;
+
+            const cores = {
+                success: 'text-green-700',
+                error: 'text-red-700',
+                warning: 'text-yellow-700',
+                info: 'text-gray-600'
+            };
+
+            feedback.textContent = mensagem;
+            feedback.className = `text-sm mt-2 ${cores[tipo] || cores.info}`;
+            feedback.classList.remove('hidden');
+        }
+
+        async function adicionarItemPorCodigoBarras() {
+            const inputCodigo = document.getElementById('barcode-sabor');
+            const inputQuantidade = document.getElementById('barcode-quantidade');
+            const codigo = inputCodigo.value.trim();
+            const quantidade = parseFloat(inputQuantidade.value) || 1;
+
+            if (!codigo) {
+                atualizarFeedbackCodigoBarras('Informe ou leia um codigo de barras.', 'warning');
+                inputCodigo.focus();
+                return;
+            }
+
+            if (quantidade <= 0) {
+                atualizarFeedbackCodigoBarras('Informe uma quantidade valida.', 'warning');
+                inputQuantidade.focus();
+                return;
+            }
+
+            try {
+                showLoading(true);
+                atualizarFeedbackCodigoBarras('Buscando sabor...', 'info');
+
+                const resultado = await addItemVendaPorCodigoBarras(vendaId, codigo, quantidade);
+                await loadVenda();
+
+                const quantidadeAdicionada = resultado?.quantidade_adicionada ?? resultado?.quantidade ?? quantidade;
+                atualizarFeedbackCodigoBarras(
+                    `${quantidadeAdicionada} UN adicionada(s): ${resultado.produto_nome} - ${resultado.sabor_nome}`,
+                    'success'
+                );
+                showToast('Item adicionado por codigo de barras!', 'success');
+
+                inputCodigo.value = '';
+                inputQuantidade.value = '1';
+                inputCodigo.focus();
+            } catch (error) {
+                const mensagem = error?.message || 'Erro ao adicionar item por codigo de barras';
+                atualizarFeedbackCodigoBarras(mensagem, 'error');
+                showToast(mensagem, 'error');
+                inputCodigo.select();
+            } finally {
+                showLoading(false);
+            }
+        }
 
         // Carregar marcas no select
         async function loadMarcasSelect() {
@@ -965,6 +1082,9 @@
         function cancelarEFecharModal() {
             saboresTemporarios = [];
             produtoAtual = null;
+            document.getElementById('barcode-sabor').value = '';
+            document.getElementById('barcode-quantidade').value = '1';
+            document.getElementById('barcode-feedback').classList.add('hidden');
             document.getElementById('item-marca').value = '';
             document.getElementById('item-produto').value = '';
             document.getElementById('item-produto').disabled = true;
