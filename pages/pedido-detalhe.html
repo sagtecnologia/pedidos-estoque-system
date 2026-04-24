@@ -75,6 +75,10 @@
                                 <dt class="text-gray-600">Total:</dt>
                                 <dd id="pedido-total" class="font-bold text-xl text-gray-900">R$ 0,00</dd>
                             </div>
+                            <div class="pt-2 border-t">
+                                <dt class="text-gray-600 text-sm mb-2">Por Produto:</dt>
+                                <dd id="pedido-quantidades-produtos" class="space-y-1 text-sm text-gray-700"></dd>
+                            </div>
                             <div class="flex justify-between pt-2 border-t">
                                 <dt class="text-gray-600 text-sm">Quantidade Total:</dt>
                                 <dd id="pedido-quantidade-total" class="font-medium text-gray-700">0 UN</dd>
@@ -975,12 +979,36 @@
             if (itens.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-4 text-center text-gray-500">Nenhum item adicionado</td></tr>';
                 document.getElementById('pedido-quantidade-total').textContent = '0 UN';
+                document.getElementById('pedido-quantidades-produtos').innerHTML = '<span class="text-gray-400">Nenhum produto</span>';
                 return;
             }
             
             // Calcular quantidade total de itens
             const quantidadeTotal = itens.reduce((sum, item) => sum + parseFloat(item.quantidade || 0), 0);
             document.getElementById('pedido-quantidade-total').textContent = `${Math.round(quantidadeTotal)} UN`;
+
+            const quantidadesPorProduto = itens.reduce((acc, item) => {
+                const produtoId = item.produto_id || item.produto?.id || item.id;
+                const quantidade = parseFloat(item.quantidade || 0);
+
+                if (!acc[produtoId]) {
+                    acc[produtoId] = {
+                        nome: item.produto?.nome || 'N/A',
+                        unidade: item.produto?.unidade || 'UN',
+                        quantidade: 0
+                    };
+                }
+
+                acc[produtoId].quantidade += quantidade;
+                return acc;
+            }, {});
+
+            document.getElementById('pedido-quantidades-produtos').innerHTML = Object.values(quantidadesPorProduto).map(produto => `
+                <div class="flex justify-between gap-3">
+                    <span class="truncate">${produto.nome}</span>
+                    <span class="font-medium whitespace-nowrap">${Math.round(produto.quantidade)} ${produto.unidade}</span>
+                </div>
+            `).join('');
 
             tbody.innerHTML = itens.map(item => {
                 const produtoNome = item.produto?.nome || 'N/A';
