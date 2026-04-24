@@ -194,6 +194,8 @@ async function initSidebar() {
         }
     }
 
+    await initPrePedidosBadge();
+
     // Fechar sidebar ao clicar fora (mobile)
     document.addEventListener('click', (e) => {
         const sidebar = document.getElementById('sidebar');
@@ -216,4 +218,59 @@ function hideMenuItems(menuIds) {
             menuItem.style.display = 'none';
         }
     });
+}
+
+async function initPrePedidosBadge() {
+    const menuItem = document.getElementById('menu-pre-pedidos');
+    const badge = document.getElementById('badge-pre-pedidos');
+
+    if (!menuItem || !badge || menuItem.style.display === 'none' || !window.supabase) {
+        return;
+    }
+
+    await atualizarBadgePrePedidos();
+
+    if (window.prePedidosBadgeInterval) {
+        clearInterval(window.prePedidosBadgeInterval);
+    }
+    window.prePedidosBadgeInterval = setInterval(atualizarBadgePrePedidos, 30000);
+
+    if (window.prePedidosBadgeChannel) {
+        window.supabase.removeChannel(window.prePedidosBadgeChannel);
+    }
+
+    if (typeof window.supabase.channel === 'function') {
+        window.prePedidosBadgeChannel = window.supabase
+            .channel('sidebar-pre-pedidos-count')
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'pre_pedidos'
+            }, atualizarBadgePrePedidos)
+            .subscribe();
+    }
+}
+
+async function atualizarBadgePrePedidos() {
+    const badge = document.getElementById('badge-pre-pedidos');
+    if (!badge || !window.supabase) {
+        return;
+    }
+
+    try {
+        const { count, error } = await window.supabase
+            .from('pre_pedidos')
+            .select('*', { count: 'exact', head: true })
+            .in('status', ['PENDENTE', 'EM_ANALISE']);
+
+        if (error) throw error;
+
+        const total = count || 0;
+        badge.textContent = total > 99 ? '99+' : total;
+        badge.title = `${total} pre-pedido${total === 1 ? '' : 's'} pendente${total === 1 ? '' : 's'}`;
+        badge.classList.toggle('hidden', total === 0);
+    } catch (error) {
+        console.error('Erro ao atualizar badge de pre-pedidos:', error);
+        badge.classList.add('hidden');
+    }
 }
