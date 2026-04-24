@@ -52,7 +52,7 @@ async function getUsuario(id) {
 }
 
 // Atualizar usuário
-async function updateUsuario(id, usuario) {
+async function updateUsuario(id, usuario, novaSenha = null) {
     try {
         showLoading(true);
 
@@ -65,7 +65,19 @@ async function updateUsuario(id, usuario) {
 
         if (error) throw error;
 
-        showToast('Usuário atualizado com sucesso!', 'success');
+        if (novaSenha) {
+            const { error: senhaError } = await supabase.rpc('admin_update_user_password', {
+                p_user_id: id,
+                p_new_password: novaSenha
+            });
+
+            if (senhaError) throw senhaError;
+        }
+
+        showToast(
+            novaSenha ? 'Usuário e senha atualizados com sucesso!' : 'Usuário atualizado com sucesso!',
+            'success'
+        );
         return data;
         
     } catch (error) {

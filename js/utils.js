@@ -474,7 +474,10 @@ function handleError(error, customMessage = 'Ocorreu um erro') {
     
     // Senha fraca
     if (errorMessage.includes('Password should be at least') ||
-        errorMessage.includes('password')) {
+        errorMessage.includes('weak password') ||
+        errorMessage.includes('password is too weak') ||
+        errorMessage.includes('senha deve ter pelo menos') ||
+        errorMessage.includes('a nova senha deve ter pelo menos')) {
         showToast('Senha muito fraca. Use no mínimo 6 caracteres.', 'error');
         return;
     }
