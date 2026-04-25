@@ -1286,6 +1286,7 @@
             }
 
             const itensData = JSON.parse(selectedOption.dataset.itens);
+            const itemIds = itensData.map(item => item.id).filter(Boolean);
             
             if (!confirm(`Tem certeza que deseja alterar o preço de TODOS os ${itensData.length} itens deste produto para ${formatCurrency(novoPreco)}?`)) {
                 return;
@@ -1294,16 +1295,26 @@
             try {
                 showLoading(true);
                 
-                // Atualizar cada item do produto
-                for (const item of itensData) {
-                    const { error } = await supabase
-                        .from('pedido_itens')
-                        .update({ preco_unitario: novoPreco })
-                        .eq('id', item.id);
+                if (itemIds.length === 0) {
+                    throw new Error('Nenhum item válido foi encontrado para atualização em lote.');
+                }
 
-                    if (error) {
-                        throw new Error(`Erro ao atualizar item: ${error.message}`);
-                    }
+                const { data: itensAtualizados, error } = await supabase
+                    .from('pedido_itens')
+                    .update({ preco_unitario: novoPreco })
+                    .in('id', itemIds)
+                    .select('id, preco_unitario');
+
+                if (error) {
+                    throw new Error(`Erro ao atualizar itens: ${error.message}`);
+                }
+
+                if (!itensAtualizados || itensAtualizados.length === 0) {
+                    throw new Error('Nenhum item foi atualizado. Verifique suas permissões ou o status do pedido.');
+                }
+
+                if (itensAtualizados.length !== itemIds.length) {
+                    throw new Error(`Somente ${itensAtualizados.length} de ${itemIds.length} itens foram atualizados. Verifique suas permissões.`);
                 }
                 
                 // Recalcular total do pedido

@@ -824,14 +824,20 @@ async function recalcularTotalPedido(pedidoId) {
         console.log(`💰 Novo total calculado: R$ ${total.toFixed(2)} (${itens.length} itens)`);
         
         // Atualizar total no pedido
-        const { error: updateError } = await supabase
+        const { data: pedidoAtualizado, error: updateError } = await supabase
             .from('pedidos')
             .update({ total: total })
-            .eq('id', pedidoId);
+            .eq('id', pedidoId)
+            .select('id, total');
         
         if (updateError) {
             console.error('❌ Erro ao atualizar total:', updateError);
             throw updateError;
+        }
+
+        if (!pedidoAtualizado || pedidoAtualizado.length === 0) {
+            console.warn('⚠️ Total do pedido não foi atualizado. Possível problema de permissão/RLS.');
+            throw new Error('Não foi possível atualizar o total do pedido. Verifique suas permissões.');
         }
         
         console.log('✅ Total do pedido atualizado com sucesso!');
