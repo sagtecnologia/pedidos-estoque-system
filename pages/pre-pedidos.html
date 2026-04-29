@@ -257,6 +257,10 @@
             document.getElementById('card-expirados').textContent = expirados;
         }
 
+        function podeReativarPrePedido(prePedido) {
+            return prePedido.status === 'EXPIRADO' && !prePedido.pedido_gerado_id;
+        }
+
         function renderizarPrePedidos() {
             const container = document.getElementById('pre-pedidos-container');
 
@@ -330,6 +334,13 @@
                                     <a href="/pages/venda-detalhe.html?id=${pp.pedido_gerado_id}" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
                                         Ver Pedido
                                     </a>
+                                ` : podeReativarPrePedido(pp) ? `
+                                    <button onclick="reativarPrePedidoExpirado('${pp.id}')" class="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition">
+                                        Reativar
+                                    </button>
+                                    <button onclick="analisarPrePedido('${pp.id}')" class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition">
+                                        Ver Detalhes
+                                    </button>
                                 ` : `
                                     <button onclick="analisarPrePedido('${pp.id}')" class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition">
                                         Ver Detalhes
@@ -604,6 +615,24 @@
             } catch (error) {
                 showLoading(false);
                 handleError(error, 'Erro ao rejeitar pré-pedido');
+            }
+        }
+
+        async function reativarPrePedidoExpirado(id) {
+            if (!confirm('Reativar este pré-pedido por mais 24 horas?')) {
+                return;
+            }
+
+            try {
+                showLoading(true);
+                await reativarPrePedido(id);
+                showLoading(false);
+
+                showToast('Pré-pedido reativado com sucesso', 'success');
+                await carregarPrePedidos();
+            } catch (error) {
+                showLoading(false);
+                handleError(error, 'Erro ao reativar pré-pedido');
             }
         }
 
