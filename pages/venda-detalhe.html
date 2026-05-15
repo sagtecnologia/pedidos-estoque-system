@@ -1194,6 +1194,7 @@
         async function renderItens() {
             const tbody = document.getElementById('itens-tbody');
             const bloquearFinanceiro = isRestrictedCommercialRole(currentUser);
+            const podeEditarItens = canEditCurrentVenda();
             
             // Controlar visibilidade da coluna de estoque
             const thEstoque = document.getElementById('th-estoque');
@@ -1390,7 +1391,7 @@
                         <td class="px-4 py-3">${formatCurrency(item.preco_unitario)}</td>
                         <td class="px-4 py-3 font-medium">${formatCurrency(item.subtotal)}</td>
                         <td class="px-4 py-3">
-                            ${venda.status === 'RASCUNHO' ? `
+                            ${podeEditarItens ? `
                                 <button onclick="editarItem('${item.id}', ${item.quantidade}, ${item.preco_unitario})" class="text-blue-600 hover:text-blue-800 text-sm mr-2" title="Editar">
                                     <i class="fas fa-edit"></i>
                                 </button>
@@ -1435,9 +1436,7 @@
                 botoes.push('<button onclick="enviarPDFWhatsAppHandler()" class="bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700">📱 Enviar WhatsApp</button>');
             }
             
-            const isAdmin = currentUser?.role === 'ADMIN';
-            const isSolicitanteDaVenda = venda.solicitante_id === currentUser?.id;
-            const podeEditar = venda.status === 'RASCUNHO' && (isSolicitanteDaVenda || isAdmin);
+            const podeEditar = canEditCurrentVenda();
             // Permite finalizar vendas em RASCUNHO (novo fluxo) ou APROVADO (pedidos antigos já aprovados)
             const podeFinalizar = ['RASCUNHO', 'APROVADO'].includes(venda.status) && ['ADMIN', 'VENDEDOR', 'COMERCIAL'].includes(currentUser.role);
             
@@ -1483,6 +1482,11 @@
         }
 
         window.removerItem = async function(itemId) {
+            if (!canEditCurrentVenda()) {
+                showToast('Você não tem permissão para editar esta venda.', 'error');
+                return;
+            }
+
             if (confirm('Deseja remover este item?')) {
                 try {
                     showLoading(true);
@@ -1495,6 +1499,10 @@
         };
 
         window.editarItem = async function(itemId, quantidadeAtual, precoAtual) {
+            if (!canEditCurrentVenda()) {
+                showToast('Você não tem permissão para editar esta venda.', 'error');
+                return;
+            }
             // Buscar informações completas do item
             const item = itens.find(i => i.id === itemId);
             if (!item) {
@@ -1591,6 +1599,11 @@
         // Form de edição de item
         document.getElementById('form-editar-item').addEventListener('submit', async (e) => {
             e.preventDefault();
+
+            if (!canEditCurrentVenda()) {
+                showToast('Você não tem permissão para editar esta venda.', 'error');
+                return;
+            }
             
             const itemId = document.getElementById('editar-item-id').value;
             const inputQuantidade = document.getElementById('editar-item-quantidade');
@@ -1653,6 +1666,12 @@
         });
 
         // Funções de aprovação removidas - vendas agora finalizam diretamente do RASCUNHO
+
+        function canEditCurrentVenda() {
+            const isAdmin = currentUser?.role === 'ADMIN';
+            const isSolicitanteDaVenda = venda?.solicitante_id === currentUser?.id;
+            return venda?.status === 'RASCUNHO' && (isSolicitanteDaVenda || isAdmin);
+        }
 
         async function finalizarVenda() {
             if (itens.length === 0) {

@@ -117,8 +117,8 @@
 
     <!-- Modal Análise -->
     <div id="modal-analise" class="modal-backdrop hidden">
-        <div class="bg-white rounded-lg shadow-xl max-w-5xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div class="flex justify-between items-center px-6 py-4 border-b bg-blue-50">
+        <div class="bg-white rounded-lg shadow-xl w-[calc(100vw-1rem)] sm:w-full max-w-6xl mx-2 sm:mx-4 max-h-[95vh] sm:max-h-[90vh] overflow-y-auto">
+            <div class="sticky top-0 z-10 flex justify-between items-center px-4 sm:px-6 py-4 border-b bg-blue-50">
                 <h3 class="text-xl font-bold text-gray-900">Análise de Pré-Pedido</h3>
                 <button onclick="fecharModalAnalise()" class="text-gray-400 hover:text-gray-600">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -126,7 +126,7 @@
                     </svg>
                 </button>
             </div>
-            <div id="analise-content" class="p-6"></div>
+            <div id="analise-content" class="p-4 sm:p-6"></div>
         </div>
     </div>
 
@@ -177,6 +177,9 @@
     <script>
         let currentUser = null;
         let prePedidos = [];
+        let prePedidoEmAnaliseId = null;
+        let opcoesItensPrePedido = [];
+        let opcoesClientesPrePedido = [];
 
         (async () => {
             await checkAuth();
@@ -393,6 +396,7 @@
         async function analisarPrePedido(id) {
             try {
                 showLoading(true);
+                prePedidoEmAnaliseId = id;
 
                 // Marcar como em análise se ainda estiver pendente
                 const pp = prePedidos.find(p => p.id === id);
@@ -403,6 +407,8 @@
                 const prePedido = await obterPrePedido(id);
                 const validacao = await validarEstoquePrePedido(id);
                 const clientes = await getClientes();
+                opcoesItensPrePedido = await listarOpcoesItensPrePedido();
+                opcoesClientesPrePedido = clientes || [];
                 
                 // Buscar cliente automaticamente
                 const clienteSugerido = await buscarClienteAutomatico(prePedido);
@@ -414,33 +420,127 @@
                     const val = validacao.validacoes.find(v => v.item_id === item.id);
                     const statusIcon = val.status === 'OK' ? '✅' : val.status === 'ALERTA' ? '⚠️' : '❌';
                     const statusColor = val.status === 'OK' ? 'text-green-600' : val.status === 'ALERTA' ? 'text-yellow-600' : 'text-red-600';
+                    const estoqueAtual = val.estoque_atual || 0;
 
                     return `
                         <tr class="border-b">
                             <td class="py-3 px-4">
-                                <p class="font-medium">${item.produto.nome}</p>
-                                ${item.sabor ? `<p class="text-sm text-gray-600">${item.sabor.sabor}</p>` : ''}
+                                ${podeGerar ? `
+                                    <div class="min-w-[320px] relative">
+                                        <label class="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">Produto / Sabor</label>
+                                        <input type="hidden" id="pre-item-produto-valor-${item.id}" value="${getProdutoPrePedidoValue(item)}">
+                                        <input type="text" id="pre-item-produto-${item.id}" value="${getProdutoPrePedidoLabel(item)}" onfocus="openProdutoPrePedidoDropdown('${item.id}')" onclick="openProdutoPrePedidoDropdown('${item.id}')" oninput="handleProdutoPrePedidoInput('${item.id}')" onblur="handleProdutoPrePedidoBlur('${item.id}')" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Digite para pesquisar produto ou sabor" autocomplete="off">
+                                        <div id="pre-item-produto-dropdown-${item.id}" class="hidden absolute z-30 mt-1 w-full max-h-56 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg">
+                                            ${buildOpcoesProdutoPrePedido(item)}
+                                        </div>
+                                        <p class="text-[11px] text-gray-400 mt-1">Pesquise escrevendo o nome do produto ou sabor.</p>
+                                    </div>
+                                ` : `
+                                    <p class="font-medium">${item.produto.nome}</p>
+                                    ${item.sabor ? `<p class="text-sm text-gray-600">${item.sabor.sabor}</p>` : ''}
+                                `}
                             </td>
-                            <td class="py-3 px-4 text-center">${item.quantidade}</td>
-                            <td class="py-3 px-4 text-right">${formatCurrency(item.preco_unitario)}</td>
+                            <td class="py-3 px-4 text-center">
+                                ${podeGerar ? `
+                                    <div class="w-28 mx-auto">
+                                        <label class="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1 text-left">Quantidade</label>
+                                        <input type="number" id="pre-item-qtd-${item.id}" min="1" step="1" value="${item.quantidade}" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-center shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    </div>
+                                ` : item.quantidade}
+                            </td>
+                            <td class="py-3 px-4 text-right">
+                                ${podeGerar ? `
+                                    <div class="w-32 ml-auto">
+                                        <label class="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1 text-left">Preço Unit.</label>
+                                        <input type="number" id="pre-item-preco-${item.id}" min="0.01" step="0.01" value="${item.preco_unitario}" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-right shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    </div>
+                                ` : formatCurrency(item.preco_unitario)}
+                            </td>
                             <td class="py-3 px-4 text-right font-medium">${formatCurrency(item.subtotal)}</td>
                             <td class="py-3 px-4 text-center ${statusColor}">
                                 ${statusIcon} ${val.mensagem}
                             </td>
+                            ${podeGerar ? `
+                                <td class="py-3 px-4 text-right whitespace-nowrap">
+                                    <button onclick="salvarItemPrePedidoAnalise('${item.id}', ${estoqueAtual})" class="px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm">
+                                        Salvar
+                                    </button>
+                                    <button onclick="excluirItemPrePedidoAnalise('${item.id}')" class="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-700 text-sm ml-2">
+                                        Remover
+                                    </button>
+                                </td>
+                            ` : ''}
                         </tr>
                     `;
                 }).join('');
 
-                const clientesOptions = clientes.map(c => 
-                    `<option value="${c.id}" ${clienteSugerido && clienteSugerido.id === c.id ? 'selected' : ''}>${c.nome} - ${c.contato || c.whatsapp || 'Sem contato'}</option>`
-                ).join('');
+                const itensMobileHtml = prePedido.pre_pedido_itens.map(item => {
+                    const val = validacao.validacoes.find(v => v.item_id === item.id);
+                    const statusIcon = val.status === 'OK' ? 'âœ…' : val.status === 'ALERTA' ? 'âš ï¸' : 'âŒ';
+                    const statusColor = val.status === 'OK' ? 'text-green-600' : val.status === 'ALERTA' ? 'text-yellow-600' : 'text-red-600';
+                    const estoqueAtual = val.estoque_atual || 0;
+
+                    return `
+                        <div class="rounded-xl border border-gray-200 bg-white p-4 space-y-3 shadow-sm">
+                            <div>
+                                ${podeGerar ? `
+                                    <div class="relative">
+                                        <label class="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">Produto / Sabor</label>
+                                        <input type="hidden" id="pre-item-produto-valor-mobile-${item.id}" value="${getProdutoPrePedidoValue(item)}">
+                                        <input type="text" id="pre-item-produto-mobile-${item.id}" value="${getProdutoPrePedidoLabel(item)}" onfocus="openProdutoPrePedidoDropdown('${item.id}')" onclick="openProdutoPrePedidoDropdown('${item.id}')" oninput="handleProdutoPrePedidoInput('${item.id}')" onblur="handleProdutoPrePedidoBlur('${item.id}')" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Digite para pesquisar produto ou sabor" autocomplete="off">
+                                        <div id="pre-item-produto-dropdown-mobile-${item.id}" class="hidden absolute z-30 mt-1 w-full max-h-56 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg">
+                                            ${buildOpcoesProdutoPrePedido(item)}
+                                        </div>
+                                    </div>
+                                ` : `
+                                    <p class="font-medium text-gray-900">${item.produto.nome}</p>
+                                    ${item.sabor ? `<p class="text-sm text-gray-600">${item.sabor.sabor}</p>` : ''}
+                                `}
+                            </div>
+                            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                <div>
+                                    <label class="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">Quantidade</label>
+                                    ${podeGerar
+                                        ? `<input type="number" id="pre-item-qtd-mobile-${item.id}" min="1" step="1" value="${item.quantidade}" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-center shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">`
+                                        : `<div class="px-3 py-2.5 rounded-xl bg-gray-50 text-center text-sm font-medium text-gray-800">${item.quantidade}</div>`}
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">PreÃ§o Unit.</label>
+                                    ${podeGerar
+                                        ? `<input type="number" id="pre-item-preco-mobile-${item.id}" min="0.01" step="0.01" value="${item.preco_unitario}" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-right shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">`
+                                        : `<div class="px-3 py-2.5 rounded-xl bg-gray-50 text-right text-sm font-medium text-gray-800">${formatCurrency(item.preco_unitario)}</div>`}
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3 text-sm">
+                                <div class="rounded-xl bg-gray-50 px-3 py-2">
+                                    <div class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Subtotal</div>
+                                    <div class="font-semibold text-gray-900">${formatCurrency(item.subtotal)}</div>
+                                </div>
+                                <div class="rounded-xl bg-gray-50 px-3 py-2">
+                                    <div class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Estoque</div>
+                                    <div class="${statusColor} font-medium">${statusIcon} ${val.mensagem}</div>
+                                </div>
+                            </div>
+                            ${podeGerar ? `
+                                <div class="flex flex-col sm:flex-row gap-2">
+                                    <button onclick="salvarItemPrePedidoAnalise('${item.id}', ${estoqueAtual})" class="flex-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
+                                        Salvar
+                                    </button>
+                                    <button onclick="excluirItemPrePedidoAnalise('${item.id}')" class="flex-1 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium">
+                                        Remover
+                                    </button>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }).join('');
 
                 const content = `
                     <div class="space-y-6">
                         <!-- Informações do Solicitante -->
                         <div class="bg-blue-50 p-4 rounded-lg">
                             <h4 class="font-bold text-lg mb-2">Informações do Solicitante</h4>
-                            <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                                 <div><span class="font-medium">Nome:</span> ${prePedido.nome_solicitante}</div>
                                 <div><span class="font-medium">Email:</span> ${prePedido.email_contato || '-'}</div>
                                 <div><span class="font-medium">Telefone:</span> ${prePedido.telefone_contato || '-'}</div>
@@ -472,7 +572,14 @@
                         <!-- Itens do Pedido -->
                         <div>
                             <h4 class="font-bold text-lg mb-3">Itens Solicitados</h4>
-                            <div class="overflow-x-auto">
+                            <div class="space-y-4 lg:hidden">
+                                ${itensMobileHtml}
+                                <div class="rounded-xl bg-gray-50 px-4 py-3 text-right">
+                                    <span class="text-sm font-semibold text-gray-600">Total:</span>
+                                    <span class="ml-2 text-xl font-bold text-blue-600">${formatCurrency(prePedido.total)}</span>
+                                </div>
+                            </div>
+                            <div class="hidden lg:block overflow-x-auto">
                                 <table class="min-w-full">
                                     <thead class="bg-gray-100">
                                         <tr>
@@ -481,6 +588,7 @@
                                             <th class="py-2 px-4 text-right">Preço Unit.</th>
                                             <th class="py-2 px-4 text-right">Subtotal</th>
                                             <th class="py-2 px-4 text-center">Estoque</th>
+                                            ${podeGerar ? '<th class="py-2 px-4 text-right">Ações</th>' : ''}
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -489,6 +597,7 @@
                                             <td colspan="3" class="py-3 px-4 text-right">Total:</td>
                                             <td class="py-3 px-4 text-right text-blue-600 text-xl">${formatCurrency(prePedido.total)}</td>
                                             <td></td>
+                                            ${podeGerar ? '<td></td>' : ''}
                                         </tr>
                                     </tbody>
                                 </table>
@@ -507,10 +616,25 @@
                                         </div>
                                     ` : ''}
                                     <label class="block text-sm font-medium text-gray-700 mb-2">Selecione o Cliente *</label>
-                                    <select id="select-cliente" class="w-full px-4 py-2 border border-gray-300 rounded-lg mb-4">
-                                        <option value="">Selecione um cliente...</option>
-                                        ${clientesOptions}
-                                    </select>
+                                    <div class="relative mb-4">
+                                        <input type="hidden" id="select-cliente" value="${clienteSugerido?.id || ''}">
+                                        <input
+                                            type="text"
+                                            id="select-cliente-busca"
+                                            value="${clienteSugerido ? getClientePrePedidoLabel(clienteSugerido) : ''}"
+                                            onfocus="openClientePrePedidoDropdown()"
+                                            onclick="openClientePrePedidoDropdown()"
+                                            oninput="handleClientePrePedidoInput()"
+                                            onblur="handleClientePrePedidoBlur()"
+                                            class="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                            placeholder="Digite para pesquisar cliente"
+                                            autocomplete="off"
+                                        >
+                                        <div id="select-cliente-dropdown" class="hidden absolute z-30 mt-1 w-full max-h-56 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg">
+                                            ${buildOpcoesClientePrePedido()}
+                                        </div>
+                                        <p class="text-[11px] text-gray-500 mt-1">Clique no campo e digite para pesquisar por nome, telefone, WhatsApp ou email.</p>
+                                    </div>
                                     <button onclick="gerarPedidoVendaModal('${prePedido.id}')" 
                                             class="w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-bold transition">
                                         Gerar Pedido de Venda
@@ -541,7 +665,8 @@
         }
 
         async function gerarPedidoVendaModal(prePedidoId) {
-            const clienteId = document.getElementById('select-cliente').value;
+            const clienteId = document.getElementById('select-cliente').value
+                || resolveClientePrePedidoOption(document.getElementById('select-cliente-busca')?.value)?.id;
             
             if (!clienteId) {
                 alert('Selecione um cliente');
@@ -575,6 +700,513 @@
 
         function fecharModalAnalise() {
             document.getElementById('modal-analise').classList.add('hidden');
+            prePedidoEmAnaliseId = null;
+        }
+
+        async function salvarItemPrePedidoAnalise(itemId, estoqueAtual) {
+            const quantidade = parseFloat(getPrePedidoQuantidadeInput(itemId)?.value);
+            const preco = parseFloat(getPrePedidoPrecoInput(itemId)?.value);
+            const produtoValor = getPrePedidoProdutoHidden(itemId)?.value;
+            const produtoInput = getPrePedidoProdutoInput(itemId);
+            const selectedOption = getOpcaoProdutoPrePedidoById(produtoValor) || resolveProdutoPrePedidoOption(produtoInput?.value);
+
+            if (quantidade <= 0 || preco <= 0) {
+                showToast('Quantidade e preço devem ser maiores que zero.', 'warning');
+                return;
+            }
+
+            if (!selectedOption) {
+                showToast('Selecione um produto válido.', 'warning');
+                return;
+            }
+
+            const produtoId = selectedOption.produtoId;
+            const saborId = selectedOption.saborId;
+            const estoqueSelecionado = parseFloat(selectedOption.estoque || estoqueAtual || 0);
+
+            try {
+                showLoading(true);
+                await atualizarItemPrePedido(itemId, {
+                    produto_id: produtoId,
+                    sabor_id: saborId,
+                    quantidade,
+                    preco_unitario: preco,
+                    estoque_disponivel_momento: estoqueSelecionado
+                });
+                await analisarPrePedido(prePedidoEmAnaliseId);
+                await carregarPrePedidos();
+                showToast('Item do pré-pedido atualizado com sucesso!', 'success');
+            } catch (error) {
+                handleError(error, 'Erro ao atualizar item do pré-pedido');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function buildOpcoesProdutoPrePedido(item) {
+            return opcoesItensPrePedido.map(opcao => {
+                const selected = item.sabor_id
+                    ? opcao.id === item.sabor_id
+                    : opcao.produto?.id === item.produto?.id;
+                const label = getOpcaoProdutoPrePedidoLabel(opcao);
+
+                return `
+                    <button
+                        type="button"
+                        onclick="selecionarProdutoPrePedido('${item.id}', '${opcao.id}')"
+                        data-produto-opcao="true"
+                        data-label="${label}"
+                        class="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
+                    >
+                        <div class="text-sm font-medium text-gray-800">${label}</div>
+                        <div class="text-xs text-gray-500">Estoque: ${parseFloat(opcao.quantidade || 0)} | Preço: ${formatCurrency(parseFloat(opcao.produto?.preco_venda || opcao.produto?.preco || 0))}</div>
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function getOpcaoProdutoPrePedidoLabel(opcao) {
+            return `${opcao.produto?.nome || 'Produto'} - ${opcao.sabor || 'Sem sabor'}`;
+        }
+
+        function isElementVisible(element) {
+            return !!(element && element.offsetParent !== null);
+        }
+
+        function isMobilePrePedidoItemActive(itemId) {
+            return isElementVisible(document.getElementById(`pre-item-produto-mobile-${itemId}`));
+        }
+
+        function getPrePedidoProdutoInput(itemId) {
+            return isMobilePrePedidoItemActive(itemId)
+                ? document.getElementById(`pre-item-produto-mobile-${itemId}`) || document.getElementById(`pre-item-produto-${itemId}`)
+                : document.getElementById(`pre-item-produto-${itemId}`) || document.getElementById(`pre-item-produto-mobile-${itemId}`);
+        }
+
+        function getPrePedidoProdutoHidden(itemId) {
+            return isMobilePrePedidoItemActive(itemId)
+                ? document.getElementById(`pre-item-produto-valor-mobile-${itemId}`) || document.getElementById(`pre-item-produto-valor-${itemId}`)
+                : document.getElementById(`pre-item-produto-valor-${itemId}`) || document.getElementById(`pre-item-produto-valor-mobile-${itemId}`);
+        }
+
+        function getPrePedidoProdutoDropdown(itemId) {
+            return isMobilePrePedidoItemActive(itemId)
+                ? document.getElementById(`pre-item-produto-dropdown-mobile-${itemId}`) || document.getElementById(`pre-item-produto-dropdown-${itemId}`)
+                : document.getElementById(`pre-item-produto-dropdown-${itemId}`) || document.getElementById(`pre-item-produto-dropdown-mobile-${itemId}`);
+        }
+
+        function getPrePedidoPrecoInput(itemId) {
+            return isMobilePrePedidoItemActive(itemId)
+                ? document.getElementById(`pre-item-preco-mobile-${itemId}`) || document.getElementById(`pre-item-preco-${itemId}`)
+                : document.getElementById(`pre-item-preco-${itemId}`) || document.getElementById(`pre-item-preco-mobile-${itemId}`);
+        }
+
+        function getPrePedidoQuantidadeInput(itemId) {
+            return isMobilePrePedidoItemActive(itemId)
+                ? document.getElementById(`pre-item-qtd-mobile-${itemId}`) || document.getElementById(`pre-item-qtd-${itemId}`)
+                : document.getElementById(`pre-item-qtd-${itemId}`) || document.getElementById(`pre-item-qtd-mobile-${itemId}`);
+        }
+
+        function getProdutoPrePedidoValue(item) {
+            return item.sabor_id || '';
+        }
+
+        function getProdutoPrePedidoLabel(item) {
+            return `${item.produto?.nome || 'Produto'} - ${item.sabor?.sabor || 'Sem sabor'}`;
+        }
+
+        function getOpcaoProdutoPrePedidoById(saborId) {
+            if (!saborId) {
+                return null;
+            }
+
+            const opcao = opcoesItensPrePedido.find(item => item.id === saborId);
+            if (!opcao) {
+                return null;
+            }
+
+            return {
+                produtoId: opcao.produto?.id || null,
+                saborId: opcao.id || null,
+                preco: parseFloat(opcao.produto?.preco_venda || opcao.produto?.preco || 0),
+                estoque: parseFloat(opcao.quantidade || 0),
+                label: getOpcaoProdutoPrePedidoLabel(opcao)
+            };
+        }
+
+        function normalizeProdutoPrePedidoText(value) {
+            return (value || '').trim().toLowerCase();
+        }
+
+        function getProdutoPrePedidoSelectedLabel(itemId) {
+            const hidden = getPrePedidoProdutoHidden(itemId);
+            const selected = getOpcaoProdutoPrePedidoById(hidden?.value);
+            return selected?.label || '';
+        }
+
+        function resolveProdutoPrePedidoOption(label) {
+            const normalizedLabel = normalizeProdutoPrePedidoText(label);
+            if (!normalizedLabel) {
+                return null;
+            }
+
+            const opcao = opcoesItensPrePedido.find(item =>
+                getOpcaoProdutoPrePedidoLabel(item).trim().toLowerCase() === normalizedLabel
+            );
+
+            if (!opcao) {
+                return null;
+            }
+
+            return {
+                produtoId: opcao.produto?.id || null,
+                saborId: opcao.id || null,
+                preco: parseFloat(opcao.produto?.preco_venda || opcao.produto?.preco || 0),
+                estoque: parseFloat(opcao.quantidade || 0),
+                label: getOpcaoProdutoPrePedidoLabel(opcao)
+            };
+        }
+
+        function openProdutoPrePedidoDropdown(itemId) {
+            closeAllProdutoPrePedidoDropdowns(itemId);
+            const input = getPrePedidoProdutoInput(itemId);
+            const selectedLabel = getProdutoPrePedidoSelectedLabel(itemId);
+            if (input && normalizeProdutoPrePedidoText(input.value) === normalizeProdutoPrePedidoText(selectedLabel)) {
+                input.dataset.previousLabel = selectedLabel;
+                input.value = '';
+            }
+            const dropdown = getPrePedidoProdutoDropdown(itemId);
+            if (dropdown) {
+                dropdown.classList.remove('hidden');
+            }
+            filterProdutoPrePedidoDropdown(itemId, true);
+        }
+
+        function handleProdutoPrePedidoInput(itemId) {
+            const input = getPrePedidoProdutoInput(itemId);
+            const hidden = getPrePedidoProdutoHidden(itemId);
+            const selectedLabel = getProdutoPrePedidoSelectedLabel(itemId);
+
+            if (!input || !hidden) {
+                return;
+            }
+
+            if (normalizeProdutoPrePedidoText(input.value) !== normalizeProdutoPrePedidoText(selectedLabel)) {
+                hidden.value = '';
+            }
+
+            filterProdutoPrePedidoDropdown(itemId);
+        }
+
+        function handleProdutoPrePedidoBlur(itemId) {
+            window.setTimeout(() => {
+                const input = getPrePedidoProdutoInput(itemId);
+                const hidden = getPrePedidoProdutoHidden(itemId);
+                if (!input || !hidden) {
+                    return;
+                }
+
+                if (!input.value.trim()) {
+                    const selected = getOpcaoProdutoPrePedidoById(hidden.value);
+                    input.value = selected?.label || input.dataset.previousLabel || '';
+                }
+
+                delete input.dataset.previousLabel;
+                closeProdutoPrePedidoDropdown(itemId);
+            }, 150);
+        }
+
+        function closeProdutoPrePedidoDropdown(itemId) {
+            const dropdown = getPrePedidoProdutoDropdown(itemId);
+            if (dropdown) {
+                dropdown.classList.add('hidden');
+            }
+        }
+
+        function closeAllProdutoPrePedidoDropdowns(exceptItemId = null) {
+            document.querySelectorAll('[id^="pre-item-produto-dropdown-"]').forEach(dropdown => {
+                if (exceptItemId && dropdown.id === `pre-item-produto-dropdown-${exceptItemId}`) {
+                    return;
+                }
+                dropdown.classList.add('hidden');
+            });
+        }
+
+        function filterProdutoPrePedidoDropdown(itemId, forceShowAll = false) {
+            const input = getPrePedidoProdutoInput(itemId);
+            const dropdown = getPrePedidoProdutoDropdown(itemId);
+
+            if (!input || !dropdown) {
+                return;
+            }
+
+            const valorAtual = input.value || '';
+            const selectedLabel = getProdutoPrePedidoSelectedLabel(itemId);
+            const isCurrentSelection = normalizeProdutoPrePedidoText(valorAtual) === normalizeProdutoPrePedidoText(selectedLabel);
+            const termo = forceShowAll || isCurrentSelection
+                ? ''
+                : normalizeProdutoPrePedidoText(valorAtual);
+            const botoes = dropdown.querySelectorAll('button[data-produto-opcao]');
+            let encontrou = false;
+
+            botoes.forEach(botao => {
+                const label = (botao.dataset.label || '').toLowerCase();
+                const visible = !termo || label.includes(termo);
+                botao.style.display = visible ? '' : 'none';
+                if (visible) {
+                    encontrou = true;
+                }
+            });
+
+            let emptyState = dropdown.querySelector('[data-empty-state]');
+            if (!emptyState) {
+                emptyState = document.createElement('div');
+                emptyState.dataset.emptyState = 'true';
+                emptyState.className = 'px-3 py-3 text-sm text-gray-500';
+                emptyState.textContent = 'Nenhum produto encontrado para a pesquisa.';
+                dropdown.appendChild(emptyState);
+            }
+
+            emptyState.style.display = encontrou ? 'none' : '';
+            dropdown.classList.remove('hidden');
+        }
+
+        function selecionarProdutoPrePedido(itemId, saborId) {
+            const input = getPrePedidoProdutoInput(itemId);
+            const hidden = getPrePedidoProdutoHidden(itemId);
+            const precoInput = getPrePedidoPrecoInput(itemId);
+            const selected = getOpcaoProdutoPrePedidoById(saborId);
+
+            if (!input || !hidden || !selected) {
+                return;
+            }
+
+            input.value = selected.label;
+            hidden.value = selected.saborId;
+            delete input.dataset.previousLabel;
+
+            const desktopInput = document.getElementById(`pre-item-produto-${itemId}`);
+            const mobileInput = document.getElementById(`pre-item-produto-mobile-${itemId}`);
+            const desktopHidden = document.getElementById(`pre-item-produto-valor-${itemId}`);
+            const mobileHidden = document.getElementById(`pre-item-produto-valor-mobile-${itemId}`);
+            if (desktopInput) desktopInput.value = selected.label;
+            if (mobileInput) mobileInput.value = selected.label;
+            if (desktopHidden) desktopHidden.value = selected.saborId;
+            if (mobileHidden) mobileHidden.value = selected.saborId;
+
+            const preco = parseFloat(selected.preco || 0);
+            if (preco > 0) {
+                precoInput.value = preco;
+                const desktopPreco = document.getElementById(`pre-item-preco-${itemId}`);
+                const mobilePreco = document.getElementById(`pre-item-preco-mobile-${itemId}`);
+                if (desktopPreco) desktopPreco.value = preco;
+                if (mobilePreco) mobilePreco.value = preco;
+            }
+
+            closeProdutoPrePedidoDropdown(itemId);
+        }
+
+        function getClientePrePedidoLabel(cliente) {
+            if (!cliente) {
+                return '';
+            }
+
+            return `${cliente.nome} - ${cliente.contato || cliente.whatsapp || cliente.email || 'Sem contato'}`;
+        }
+
+        function normalizeClientePrePedidoText(value) {
+            return (value || '').trim().toLowerCase();
+        }
+
+        function buildOpcoesClientePrePedido() {
+            return opcoesClientesPrePedido.map(cliente => {
+                const label = getClientePrePedidoLabel(cliente);
+                const busca = [
+                    cliente.nome,
+                    cliente.contato,
+                    cliente.whatsapp,
+                    cliente.email
+                ].filter(Boolean).join(' ').toLowerCase();
+
+                return `
+                    <button
+                        type="button"
+                        onclick="selecionarClientePrePedido('${cliente.id}')"
+                        data-cliente-opcao="true"
+                        data-label="${label}"
+                        data-search="${busca}"
+                        class="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
+                    >
+                        <div class="text-sm font-medium text-gray-800">${cliente.nome}</div>
+                        <div class="text-xs text-gray-500">${cliente.contato || cliente.whatsapp || cliente.email || 'Sem contato'}</div>
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function getClientePrePedidoById(clienteId) {
+            if (!clienteId) {
+                return null;
+            }
+
+            return opcoesClientesPrePedido.find(cliente => cliente.id === clienteId) || null;
+        }
+
+        function resolveClientePrePedidoOption(label) {
+            const normalizedLabel = normalizeClientePrePedidoText(label);
+            if (!normalizedLabel) {
+                return null;
+            }
+
+            return opcoesClientesPrePedido.find(cliente =>
+                normalizeClientePrePedidoText(getClientePrePedidoLabel(cliente)) === normalizedLabel
+            ) || null;
+        }
+
+        function openClientePrePedidoDropdown() {
+            const input = document.getElementById('select-cliente-busca');
+            const hidden = document.getElementById('select-cliente');
+            const selected = getClientePrePedidoById(hidden?.value);
+
+            if (input && selected && normalizeClientePrePedidoText(input.value) === normalizeClientePrePedidoText(getClientePrePedidoLabel(selected))) {
+                input.dataset.previousLabel = getClientePrePedidoLabel(selected);
+                input.value = '';
+            }
+
+            const dropdown = document.getElementById('select-cliente-dropdown');
+            if (dropdown) {
+                dropdown.classList.remove('hidden');
+            }
+
+            filterClientePrePedidoDropdown(true);
+        }
+
+        function closeClientePrePedidoDropdown() {
+            const dropdown = document.getElementById('select-cliente-dropdown');
+            if (dropdown) {
+                dropdown.classList.add('hidden');
+            }
+        }
+
+        function handleClientePrePedidoInput() {
+            const input = document.getElementById('select-cliente-busca');
+            const hidden = document.getElementById('select-cliente');
+            const selected = getClientePrePedidoById(hidden?.value);
+            const selectedLabel = selected ? getClientePrePedidoLabel(selected) : '';
+
+            if (!input || !hidden) {
+                return;
+            }
+
+            if (normalizeClientePrePedidoText(input.value) !== normalizeClientePrePedidoText(selectedLabel)) {
+                hidden.value = '';
+            }
+
+            filterClientePrePedidoDropdown();
+        }
+
+        function handleClientePrePedidoBlur() {
+            window.setTimeout(() => {
+                const input = document.getElementById('select-cliente-busca');
+                const hidden = document.getElementById('select-cliente');
+                const selected = getClientePrePedidoById(hidden?.value);
+
+                if (!input || !hidden) {
+                    return;
+                }
+
+                if (!input.value.trim()) {
+                    input.value = selected ? getClientePrePedidoLabel(selected) : (input.dataset.previousLabel || '');
+                }
+
+                delete input.dataset.previousLabel;
+                closeClientePrePedidoDropdown();
+            }, 150);
+        }
+
+        function filterClientePrePedidoDropdown(forceShowAll = false) {
+            const input = document.getElementById('select-cliente-busca');
+            const hidden = document.getElementById('select-cliente');
+            const dropdown = document.getElementById('select-cliente-dropdown');
+            const selected = getClientePrePedidoById(hidden?.value);
+            const selectedLabel = selected ? getClientePrePedidoLabel(selected) : '';
+
+            if (!input || !dropdown) {
+                return;
+            }
+
+            const termo = forceShowAll || normalizeClientePrePedidoText(input.value) === normalizeClientePrePedidoText(selectedLabel)
+                ? ''
+                : normalizeClientePrePedidoText(input.value);
+
+            const botoes = dropdown.querySelectorAll('button[data-cliente-opcao]');
+            let encontrou = false;
+
+            botoes.forEach(botao => {
+                const textoBusca = `${botao.dataset.label || ''} ${botao.dataset.search || ''}`.toLowerCase();
+                const visible = !termo || textoBusca.includes(termo);
+                botao.style.display = visible ? '' : 'none';
+                if (visible) {
+                    encontrou = true;
+                }
+            });
+
+            let emptyState = dropdown.querySelector('[data-cliente-empty-state]');
+            if (!emptyState) {
+                emptyState = document.createElement('div');
+                emptyState.dataset.clienteEmptyState = 'true';
+                emptyState.className = 'px-3 py-3 text-sm text-gray-500';
+                emptyState.textContent = 'Nenhum cliente encontrado para a pesquisa.';
+                dropdown.appendChild(emptyState);
+            }
+
+            emptyState.style.display = encontrou ? 'none' : '';
+            dropdown.classList.remove('hidden');
+        }
+
+        function selecionarClientePrePedido(clienteId) {
+            const input = document.getElementById('select-cliente-busca');
+            const hidden = document.getElementById('select-cliente');
+            const cliente = getClientePrePedidoById(clienteId);
+
+            if (!input || !hidden || !cliente) {
+                return;
+            }
+
+            hidden.value = cliente.id;
+            input.value = getClientePrePedidoLabel(cliente);
+            delete input.dataset.previousLabel;
+            closeClientePrePedidoDropdown();
+        }
+
+        document.addEventListener('click', (event) => {
+            const container = event.target.closest('[id^="pre-item-produto-"]');
+            const wrapper = event.target.closest('.relative');
+
+            if (container || wrapper?.querySelector?.('[id^="pre-item-produto-dropdown-"]')) {
+                return;
+            }
+
+            closeAllProdutoPrePedidoDropdowns();
+            closeClientePrePedidoDropdown();
+        });
+
+        async function excluirItemPrePedidoAnalise(itemId) {
+            if (!confirm('Deseja remover este item do pré-pedido?')) {
+                return;
+            }
+
+            try {
+                showLoading(true);
+                await removerItemPrePedido(itemId);
+                await analisarPrePedido(prePedidoEmAnaliseId);
+                await carregarPrePedidos();
+                showToast('Item removido do pré-pedido com sucesso!', 'success');
+            } catch (error) {
+                handleError(error, 'Erro ao remover item do pré-pedido');
+            } finally {
+                showLoading(false);
+            }
         }
 
         function abrirModalRejeitar(id) {
@@ -612,7 +1244,8 @@
         }
 
         async function gerarPedidoVendaModal(prePedidoId) {
-            const clienteId = document.getElementById('select-cliente').value;
+            const clienteId = document.getElementById('select-cliente').value
+                || resolveClientePrePedidoOption(document.getElementById('select-cliente-busca')?.value)?.id;
             
             if (!clienteId) {
                 alert('Selecione um cliente');

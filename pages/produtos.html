@@ -21,7 +21,7 @@
                     </h2>
                     <p class="text-gray-600 mt-1">Gerenciamento de produtos</p>
                 </div>
-                <button id="btn-novo-produto" onclick="openModal('modal-produto')" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition">
+                <button id="btn-novo-produto" onclick="abrirNovoProdutoModal()" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition">
                     + Novo Produto
                 </button>
             </div>
@@ -113,6 +113,7 @@
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">Preço de Compra (R$)*</label>
                         <input type="number" step="0.01" id="produto-preco-compra" value="0" required class="w-full px-4 py-2 border border-gray-300 rounded-lg" placeholder="0.00" oninput="calcularMargem()">
+                        <p id="produto-preco-compra-help" class="hidden text-xs text-amber-600 mt-1">Campo bloqueado para o perfil comercial.</p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">Preço de Venda (R$)*</label>
@@ -174,6 +175,7 @@
         let editingId = null;
         let saboresCount = 0;
         let currentUser = null;
+        let editingPrecoCompraOriginal = 0;
 
         (async () => {
             await checkAuth();
@@ -188,18 +190,57 @@
         })();
 
         function applyRoleRestrictions() {
-            if (!isRestrictedCommercialRole(currentUser)) {
+            configurePrecoCompraField();
+        }
+
+        function isCommercialProductRestrictionsActive() {
+            return isRestrictedCommercialRole(currentUser);
+        }
+
+        function configurePrecoCompraField(produto = null) {
+            const precoCompraInput = document.getElementById('produto-preco-compra');
+            const precoCompraHelp = document.getElementById('produto-preco-compra-help');
+            const isCommercial = isRestrictedCommercialRole(currentUser);
+
+            if (!precoCompraInput || !precoCompraHelp) {
                 return;
             }
 
-            const btnNovoProduto = document.getElementById('btn-novo-produto');
-            if (btnNovoProduto) {
-                btnNovoProduto.classList.add('hidden');
+            if (!isCommercial) {
+                precoCompraInput.disabled = false;
+                precoCompraInput.required = true;
+                precoCompraInput.classList.remove('bg-gray-100', 'text-gray-500', 'cursor-not-allowed');
+                precoCompraInput.placeholder = '0.00';
+                precoCompraHelp.classList.add('hidden');
+                precoCompraInput.value = produto ? (produto.preco_compra || produto.preco || 0) : (precoCompraInput.value || 0);
+                return;
             }
+
+            precoCompraInput.disabled = true;
+            precoCompraInput.required = false;
+            precoCompraInput.classList.add('bg-gray-100', 'text-gray-500', 'cursor-not-allowed');
+            precoCompraInput.value = '';
+            precoCompraInput.placeholder = produto ? 'Preço preservado' : 'Sem acesso';
+            precoCompraHelp.classList.remove('hidden');
+        }
+
+        function abrirNovoProdutoModal() {
+            editingId = null;
+            editingPrecoCompraOriginal = 0;
+            document.getElementById('modal-title').textContent = 'Novo Produto';
+            document.getElementById('form-produto').reset();
+            limparSabores();
+            document.getElementById('produto-unidade').value = 'UN';
+            document.getElementById('produto-estoque-minimo').value = 5;
+            document.getElementById('produto-preco-venda').value = 0;
+            configurePrecoCompraField();
+            calcularMargem();
+            openModal('modal-produto');
         }
 
         // Gerenciamento de Sabores
         function adicionarSabor(sabor = '', quantidade = 0, saborId = null, codigoBarras = '') {
+            const isCommercial = isCommercialProductRestrictionsActive();
             saboresCount++;
             const container = document.getElementById('sabores-container');
             const div = document.createElement('div');
@@ -231,10 +272,11 @@
                         type="number" 
                         name="sabor-qtd-${saboresCount}" 
                         value="${quantidade}" 
-                        placeholder="Qtd" 
+                        placeholder="${isCommercial ? 'Bloqueado' : 'Qtd'}" 
                         step="1"
                         min="0"
-                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm ${isCommercial ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}"
+                        ${isCommercial ? 'disabled' : ''}
                     >
                 </div>
                 <button 
@@ -336,7 +378,9 @@
                     </td>
                     <td class="px-6 py-4 text-sm space-x-2">
                         ${isRestrictedCommercialRole(currentUser)
-                            ? '-'
+                            ? `
+                                <button onclick="editProduto('${p.id}')" class="text-blue-600 hover:text-blue-800">Editar</button>
+                            `
                             : `
                                 <button onclick="editProduto('${p.id}')" class="text-blue-600 hover:text-blue-800">Editar</button>
                                 <button onclick="deleteProdutoHandler('${p.id}')" class="text-red-600 hover:text-red-800">Excluir</button>
@@ -348,13 +392,10 @@
 
         document.getElementById('form-produto').addEventListener('submit', async (e) => {
             e.preventDefault();
-
-            if (isRestrictedCommercialRole(currentUser)) {
-                showToast('Seu perfil possui acesso somente para consulta de produtos.', 'warning');
-                return;
-            }
             
-            const precoCompra = parseFloat(document.getElementById('produto-preco-compra').value) || 0;
+            const precoCompra = isRestrictedCommercialRole(currentUser)
+                ? (editingId ? editingPrecoCompraOriginal : 0)
+                : (parseFloat(document.getElementById('produto-preco-compra').value) || 0);
             const precoVenda = parseFloat(document.getElementById('produto-preco-venda').value) || 0;
             
             // Validar e formatar nome e marca
@@ -386,19 +427,17 @@
             document.getElementById('form-produto').reset();
             limparSabores();
             editingId = null;
+            editingPrecoCompraOriginal = 0;
+            configurePrecoCompraField();
             await loadProdutos();
         });
 
         async function editProduto(id) {
-            if (isRestrictedCommercialRole(currentUser)) {
-                showToast('Seu perfil possui acesso somente para consulta de produtos.', 'warning');
-                return;
-            }
-
             const produto = await getProduto(id);
             if (!produto) return;
 
             editingId = id;
+            editingPrecoCompraOriginal = produto.preco_compra || produto.preco || 0;
             document.getElementById('modal-title').textContent = 'Editar Produto';
             // Código não é editável - gerado automaticamente
             document.getElementById('produto-nome').value = produto.nome;
@@ -406,8 +445,8 @@
             document.getElementById('produto-categoria').value = produto.categoria || '';
             document.getElementById('produto-unidade').value = produto.unidade;
             document.getElementById('produto-estoque-minimo').value = produto.estoque_minimo;
-            document.getElementById('produto-preco-compra').value = produto.preco_compra || produto.preco || 0;
             document.getElementById('produto-preco-venda').value = produto.preco_venda || produto.preco || 0;
+            configurePrecoCompraField(produto);
             
             // Carregar sabores
             limparSabores();
@@ -422,7 +461,7 @@
 
         async function deleteProdutoHandler(id) {
             if (isRestrictedCommercialRole(currentUser)) {
-                showToast('Seu perfil possui acesso somente para consulta de produtos.', 'warning');
+                showToast('Seu perfil não pode excluir produtos.', 'warning');
                 return;
             }
 

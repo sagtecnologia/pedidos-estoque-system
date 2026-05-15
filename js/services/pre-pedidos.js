@@ -422,6 +422,149 @@ async function validarEstoquePrePedido(prePedidoId) {
     }
 }
 
+async function recalcularTotalPrePedido(prePedidoId) {
+    const { data: itens, error: itensError } = await supabase
+        .from('pre_pedido_itens')
+        .select('subtotal')
+        .eq('pre_pedido_id', prePedidoId);
+
+    if (itensError) throw itensError;
+
+    const total = (itens || []).reduce((sum, item) => sum + (parseFloat(item.subtotal) || 0), 0);
+
+    const { error: updateError } = await supabase
+        .from('pre_pedidos')
+        .update({ total })
+        .eq('id', prePedidoId);
+
+    if (updateError) throw updateError;
+
+    return total;
+}
+
+async function atualizarItemPrePedido(itemId, dados) {
+    try {
+        const { data: itemAtual, error: itemError } = await supabase
+            .from('pre_pedido_itens')
+            .select('id, pre_pedido_id, pre_pedido:pre_pedidos(status)')
+            .eq('id', itemId)
+            .single();
+
+        if (itemError) throw itemError;
+
+        if (!['PENDENTE', 'EM_ANALISE'].includes(itemAtual.pre_pedido?.status)) {
+            throw new Error('Apenas itens de pré-pedidos pendentes ou em análise podem ser editados');
+        }
+
+        const payload = {
+            quantidade: dados.quantidade,
+            preco_unitario: dados.preco_unitario
+        };
+
+        if (dados.produto_id) {
+            payload.produto_id = dados.produto_id;
+        }
+
+        if (Object.prototype.hasOwnProperty.call(dados, 'sabor_id')) {
+            payload.sabor_id = dados.sabor_id || null;
+        }
+
+        if (dados.estoque_disponivel_momento !== undefined) {
+            payload.estoque_disponivel_momento = dados.estoque_disponivel_momento;
+        }
+
+        const { data, error } = await supabase
+            .from('pre_pedido_itens')
+            .update(payload)
+            .eq('id', itemId)
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        await recalcularTotalPrePedido(itemAtual.pre_pedido_id);
+        return data;
+    } catch (error) {
+        console.error('Erro ao atualizar item do pré-pedido:', error);
+        throw error;
+    }
+}
+
+async function listarOpcoesItensPrePedido() {
+    try {
+        const { data, error } = await supabase
+            .from('produto_sabores')
+            .select(`
+                id,
+                sabor,
+                quantidade,
+                produto:produtos (
+                    id,
+                    nome,
+                    marca,
+                    preco_venda,
+                    preco,
+                    active
+                )
+            `)
+            .eq('ativo', true)
+            .order('sabor');
+
+        if (error) throw error;
+
+        return (data || [])
+            .filter(item => item.produto && item.produto.active !== false)
+            .sort((a, b) => {
+                const produtoA = `${a.produto?.nome || ''} ${a.sabor || ''}`.trim();
+                const produtoB = `${b.produto?.nome || ''} ${b.sabor || ''}`.trim();
+                return produtoA.localeCompare(produtoB, 'pt-BR');
+            });
+    } catch (error) {
+        console.error('Erro ao listar opções de itens do pré-pedido:', error);
+        throw error;
+    }
+}
+
+async function removerItemPrePedido(itemId) {
+    try {
+        const { data: itemAtual, error: itemError } = await supabase
+            .from('pre_pedido_itens')
+            .select('id, pre_pedido_id, pre_pedido:pre_pedidos(status)')
+            .eq('id', itemId)
+            .single();
+
+        if (itemError) throw itemError;
+
+        if (!['PENDENTE', 'EM_ANALISE'].includes(itemAtual.pre_pedido?.status)) {
+            throw new Error('Apenas itens de pré-pedidos pendentes ou em análise podem ser removidos');
+        }
+
+        const { count, error: countError } = await supabase
+            .from('pre_pedido_itens')
+            .select('*', { count: 'exact', head: true })
+            .eq('pre_pedido_id', itemAtual.pre_pedido_id);
+
+        if (countError) throw countError;
+
+        if ((count || 0) <= 1) {
+            throw new Error('O pré-pedido precisa ter pelo menos um item');
+        }
+
+        const { error } = await supabase
+            .from('pre_pedido_itens')
+            .delete()
+            .eq('id', itemId);
+
+        if (error) throw error;
+
+        await recalcularTotalPrePedido(itemAtual.pre_pedido_id);
+        return true;
+    } catch (error) {
+        console.error('Erro ao remover item do pré-pedido:', error);
+        throw error;
+    }
+}
+
 /**
  * Gerar pedido de venda a partir do pré-pedido
  * @param {string} prePedidoId - ID do pré-pedido

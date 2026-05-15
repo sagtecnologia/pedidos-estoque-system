@@ -387,20 +387,11 @@ async function createProdutoComSabores(produto, sabores) {
 
         if (produtoError) throw produtoError;
 
-        // 2. Criar sabores
+        // 2. Criar sabores via funcao com bypass controlado de RLS
         if (saboresNormalizados.length > 0) {
-            const saboresInsert = saboresNormalizados.map(s => ({
-                produto_id: produtoData.id,
-                sabor: s.sabor,
-                quantidade: s.quantidade || 0,
-                ativo: true
-            }));
-
-            const { error: saboresError } = await supabase
-                .from('produto_sabores')
-                .insert(saboresInsert);
-
-            if (saboresError) throw saboresError;
+            for (const sabor of saboresNormalizados) {
+                await salvarSaborProduto(produtoData.id, sabor);
+            }
         }
 
         showToast('Produto criado com sucesso!', 'success');
