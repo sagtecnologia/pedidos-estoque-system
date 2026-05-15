@@ -96,17 +96,17 @@
 
             <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden hidden lg:block">
                 <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200">
+                    <table class="w-full table-fixed divide-y divide-gray-200">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Produto</th>
-                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Marca / Categoria</th>
-                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Sabor</th>
-                                <th class="px-6 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider w-32">Estoque Atual</th>
-                                <th class="px-6 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider w-36">Novo Estoque</th>
-                                <th class="px-6 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider w-28">Diferenca</th>
-                                <th class="px-6 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Motivo</th>
-                                <th class="sticky right-0 z-10 bg-gray-50 px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider w-28 border-l border-gray-200 shadow-[-8px_0_12px_-12px_rgba(0,0,0,0.25)]">Acao</th>
+                                <th class="w-[13%] px-3 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Produto</th>
+                                <th class="w-[10%] px-3 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Marca / Categoria</th>
+                                <th class="w-[24%] px-3 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Sabor</th>
+                                <th class="w-[9%] px-3 py-3 text-center text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Estoque Atual</th>
+                                <th class="w-[11%] px-3 py-3 text-center text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Novo Estoque</th>
+                                <th class="w-[7%] px-3 py-3 text-center text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Diferenca</th>
+                                <th class="w-[16%] px-3 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Motivo</th>
+                                <th class="w-[10%] px-3 py-3 text-center text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Acao</th>
                             </tr>
                         </thead>
                         <tbody id="tbody-ajuste" class="bg-white divide-y divide-gray-200">
@@ -432,20 +432,20 @@
 
                 return `
                     <tr id="row-prod-${produto.id}" class="hover:bg-gray-50 transition-colors ${temAjuste ? 'bg-blue-50 border-l-4 border-blue-400' : ''}">
-                        <td class="px-6 py-4">
-                            <div class="font-semibold text-gray-900 text-sm">${produto.nome}</div>
-                            <div class="text-xs text-gray-500 mt-0.5">SKU: ${sku}</div>
-                            <div class="text-xs text-gray-400 mt-0.5">
+                        <td class="px-3 py-4 align-middle">
+                            <div class="font-semibold text-gray-900 text-sm leading-5">${produto.nome}</div>
+                            <div class="text-[11px] text-gray-500 mt-0.5">SKU: ${sku}</div>
+                            <div class="text-[11px] text-gray-400 mt-0.5 leading-4">
                                 ${grupo.sabores.length} sabor${grupo.sabores.length !== 1 ? 'es' : ''} cadastrados
                                 ${pendentesProduto ? `| ${pendentesProduto} pendente${pendentesProduto !== 1 ? 's' : ''}` : ''}
                             </div>
                         </td>
-                        <td class="px-6 py-4">
-                            <div class="text-sm font-medium text-gray-800">${produto.marca || '-'}</div>
-                            <div class="text-xs text-gray-500 uppercase mt-0.5">${produto.categoria || '-'}</div>
+                        <td class="px-3 py-4 align-middle">
+                            <div class="text-sm font-medium text-gray-800 leading-5 break-words">${produto.marca || '-'}</div>
+                            <div class="text-[11px] text-gray-500 uppercase mt-0.5 break-words">${produto.categoria || '-'}</div>
                         </td>
-                        <td class="px-6 py-4">
-                            <div class="relative min-w-[240px]">
+                        <td class="px-3 py-4 align-middle">
+                            <div class="relative">
                                 <input type="hidden" id="sabor-prod-valor-${produto.id}" value="${saborSelecionado.id}">
                                 <input
                                     type="text"
@@ -455,7 +455,7 @@
                                     onclick="openAjusteSaborDropdown('${produto.id}')"
                                     oninput="handleAjusteSaborInput('${produto.id}')"
                                     onblur="handleAjusteSaborBlur('${produto.id}')"
-                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                                    class="w-full px-2.5 py-2 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 bg-white"
                                     placeholder="Digite para pesquisar sabor"
                                     autocomplete="off"
                                 >
@@ -464,10 +464,10 @@
                                 </div>
                             </div>
                         </td>
-                        <td class="px-6 py-4 text-center">
-                            <span class="text-base font-bold text-gray-800">${estoqueAtual.toFixed(2)}</span>
+                        <td class="px-3 py-4 text-center align-middle">
+                            <span class="text-sm font-bold text-gray-800">${estoqueAtual.toFixed(2)}</span>
                         </td>
-                        <td class="px-6 py-4 text-center">
+                        <td class="px-3 py-4 text-center align-middle">
                             <input
                                 id="novo-estoque-prod-${produto.id}"
                                 type="number"
@@ -475,25 +475,25 @@
                                 step="0.01"
                                 value="${novoEstoqueVal}"
                                 placeholder="—"
-                                class="w-28 text-center px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white"
+                                class="h-8 w-24 text-center px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs bg-white"
                                 oninput="onNovoEstoqueInputProduto('${produto.id}', this.value)"
                                 onchange="onNovoEstoqueInputProduto('${produto.id}', this.value)">
                         </td>
-                        <td class="px-6 py-4 text-center">
-                            <span id="diff-prod-${produto.id}" class="${diffClass}">${diffStr}</span>
+                        <td class="px-3 py-4 text-center align-middle">
+                            <span id="diff-prod-${produto.id}" class="text-xs ${diffClass}">${diffStr}</span>
                         </td>
-                        <td class="px-6 py-4">
+                        <td class="px-3 py-4 align-middle">
                             <select id="motivo-prod-${produto.id}"
-                                class="w-full min-w-[180px] px-2 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                                class="h-8 w-full px-2 py-1.5 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 bg-white"
                                 onchange="onMotivoChangeProduto('${produto.id}', this.value)">
                                 ${MOTIVOS_AJUSTE.map(motivo => `
                                     <option value="${motivo}" ${motivoSelecionado === motivo ? 'selected' : ''}>${motivo}</option>
                                 `).join('')}
                             </select>
                         </td>
-                        <td class="sticky right-0 z-10 bg-white px-4 py-4 text-center border-l border-gray-100 shadow-[-8px_0_12px_-12px_rgba(0,0,0,0.25)]">
+                        <td class="px-3 py-4 text-center align-middle">
                             <button onclick="salvarAjusteProduto('${produto.id}')"
-                                class="flex items-center gap-1.5 mx-auto px-3 py-1.5 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-100 text-sm font-medium transition">
+                                class="inline-flex h-8 items-center gap-1 mx-auto px-2.5 py-1.5 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-100 text-xs font-medium transition whitespace-nowrap">
                                 <i class="fas fa-save text-xs"></i> Salvar
                             </button>
                         </td>
