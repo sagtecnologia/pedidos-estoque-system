@@ -361,6 +361,27 @@ async function rejeitarPrePedido(id, motivo) {
 }
 
 /**
+ * Reativar pré-pedido expirado por mais 24h
+ */
+async function reativarPrePedido(id) {
+    const prePedido = await obterPrePedido(id);
+
+    if (prePedido.status !== 'EXPIRADO') {
+        throw new Error('Apenas pré-pedidos expirados podem ser reativados');
+    }
+
+    const novaDataExpiracao = new Date();
+    novaDataExpiracao.setHours(novaDataExpiracao.getHours() + 24);
+
+    return await atualizarStatusPrePedido(id, 'PENDENTE', {
+        data_expiracao: novaDataExpiracao.toISOString(),
+        analisado_por: null,
+        data_analise: null,
+        motivo_rejeicao: null
+    });
+}
+
+/**
  * Validar estoque dos itens do pré-pedido
  */
 async function validarEstoquePrePedido(prePedidoId) {

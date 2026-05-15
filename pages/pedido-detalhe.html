@@ -612,7 +612,6 @@
         // Renderizar lista de sabores com campos de quantidade
         function renderListaSabores(sabores) {
             const tbody = document.getElementById('tbody-sabores-lista');
-            const mascararPrecoCompra = isRestrictedCommercialRole(currentUser);
             
             tbody.innerHTML = sabores.map(s => `
                 <tr class="border-t hover:bg-gray-50">
@@ -630,7 +629,7 @@
                             oninput="calcularTotalCompra()">
                     </td>
                     <td class="px-3 py-3">
-                        <input type="${mascararPrecoCompra ? 'password' : 'number'}" 
+                        <input type="number" 
                             step="0.01" 
                             min="0.01" 
                             value="${produtoAtual.preco.toFixed(2)}"
@@ -642,7 +641,7 @@
                             oninput="calcularTotalCompra()">
                     </td>
                     <td class="px-3 py-3">
-                        <span class="sabor-subtotal font-medium text-gray-900" data-sabor-id="${s.id}">${formatMaskedCurrency(0, currentUser)}</span>
+                        <span class="sabor-subtotal font-medium text-gray-900" data-sabor-id="${s.id}">${formatCurrency(0)}</span>
                     </td>
                 </tr>
             `).join('');
@@ -665,14 +664,14 @@
                 
                 // Atualizar subtotal do sabor
                 const subtotalSpan = document.querySelector(`.sabor-subtotal[data-sabor-id="${saborId}"]`);
-                subtotalSpan.textContent = formatMaskedCurrency(subtotal, currentUser);
+                subtotalSpan.textContent = formatCurrency(subtotal);
                 
                 total += subtotal;
                 quantidadeTotalItens += quantidade;
             });
             
             document.getElementById('quantidade-total-compra').textContent = `${Math.round(quantidadeTotalItens)} UN`;
-            document.getElementById('total-compra').textContent = formatMaskedCurrency(total, currentUser);
+            document.getElementById('total-compra').textContent = formatCurrency(total);
         }
 
         // Atualizar estoque quando selecionar sabor (não usado mais)
@@ -705,11 +704,11 @@
                         <div class="px-6 py-4">
                             <div class="mb-4">
                                 <label class="block text-sm font-medium text-gray-700 mb-2">Preço Atual de Todos os Sabores</label>
-                                <input type="text" readonly value="${formatMaskedCurrency(precoAtual, currentUser)}" class="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-gray-700">
+                                <input type="text" readonly value="${formatCurrency(precoAtual)}" class="w-full px-4 py-2 bg-gray-50 border border-gray-300 rounded-lg text-gray-700">
                             </div>
                             <div class="mb-4">
                                 <label class="block text-sm font-medium text-gray-700 mb-2">Novo Preço Unitário*</label>
-                                <input type="${isRestrictedCommercialRole(currentUser) ? 'password' : 'number'}" 
+                                <input type="number" 
                                     id="novo-preco-lote-modal" 
                                     step="0.01" 
                                     min="0.01" 
@@ -870,7 +869,7 @@
             document.getElementById('item-produto').disabled = true;
             document.getElementById('item-produto').innerHTML = '<option value="">Selecione o produto...</option>';
             document.getElementById('tbody-sabores-lista').innerHTML = '';
-            document.getElementById('total-compra').textContent = formatMaskedCurrency(0, currentUser);
+            document.getElementById('total-compra').textContent = formatCurrency(0);
             document.getElementById('area-adicionar-sabor').classList.add('hidden');
             document.getElementById('btn-salvar-todos').classList.add('hidden');
             closeModal('modal-item');
@@ -892,7 +891,7 @@
 
             document.getElementById('pedido-numero').textContent = `Pedido ${pedido.numero}`;
             document.getElementById('pedido-status').innerHTML = getStatusBadge(pedido.status);
-            document.getElementById('pedido-total').textContent = formatMaskedCurrency(pedido.total, currentUser);
+            document.getElementById('pedido-total').textContent = formatCurrency(pedido.total);
             document.getElementById('pedido-solicitante').textContent = pedido.solicitante?.full_name || 'N/A';
             document.getElementById('pedido-fornecedor').textContent = pedido.fornecedor?.nome || '-';
             document.getElementById('pedido-data').textContent = formatDate(pedido.created_at);
@@ -907,7 +906,7 @@
             
             // Controle de visibilidade do botão editar observações
             const btnEditarObs = document.getElementById('btn-editar-obs');
-            if (pedido.status === 'RASCUNHO' && pedido.solicitante_id === currentUser.id) {
+            if (pedido.status === 'RASCUNHO') {
                 btnEditarObs.classList.remove('hidden');
             } else if (currentUser.role === 'ADMIN') {
                 btnEditarObs.classList.remove('hidden');
@@ -923,10 +922,10 @@
             // Botão de impressão sempre visível
             let botoesHTML = '<button onclick="imprimirPedidoCompra(\'' + pedidoId + '\')" class="bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700">🖨️ Imprimir</button>';
             
-            const podeEditar = pedido.status === 'RASCUNHO' && pedido.solicitante_id === currentUser.id;
+            const podeEditar = pedido.status === 'RASCUNHO';
             
             if (podeEditar) {
-                // Solicitante pode editar, finalizar e excluir
+                // Pedido em rascunho pode ser editado, finalizado e excluido
                 botoesHTML += ' <button onclick="finalizarPedidoHandler()" class="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700">✅ Finalizar Pedido</button>';
                 botoesHTML += ' <button onclick="excluirPedido()" class="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700">🗑️ Excluir Pedido</button>';
                 btnAddItem.style.display = 'block';
@@ -1063,8 +1062,8 @@
                             <div class="text-xs text-gray-500">${item.produto?.codigo || ''}</div>
                         </td>
                         <td class="px-4 py-3 text-sm">${item.quantidade} ${item.produto?.unidade || ''}</td>
-                        <td class="px-4 py-3 text-sm">${formatMaskedCurrency(item.preco_unitario, currentUser)}</td>
-                        <td class="px-4 py-3 text-sm font-semibold">${formatMaskedCurrency(item.subtotal, currentUser)}</td>
+                        <td class="px-4 py-3 text-sm">${formatCurrency(item.preco_unitario)}</td>
+                        <td class="px-4 py-3 text-sm font-semibold">${formatCurrency(item.subtotal)}</td>
                         <td class="px-4 py-3 text-sm">
                             ${acoesHTML}
                         </td>
@@ -1108,7 +1107,7 @@
             
             document.getElementById('editar-item-quantidade').value = quantidadeAtual;
             const inputPrecoEdicao = document.getElementById('editar-item-preco');
-            inputPrecoEdicao.type = isRestrictedCommercialRole(currentUser) ? 'password' : 'number';
+            inputPrecoEdicao.type = 'number';
             inputPrecoEdicao.inputMode = 'decimal';
             inputPrecoEdicao.autocomplete = 'off';
             inputPrecoEdicao.value = precoAtual;
@@ -1124,7 +1123,7 @@
             const quantidade = parseFloat(document.getElementById('editar-item-quantidade').value) || 0;
             const preco = parseFloat(document.getElementById('editar-item-preco').value) || 0;
             const subtotal = quantidade * preco;
-            document.getElementById('editar-item-subtotal').textContent = formatMaskedCurrency(subtotal, currentUser);
+            document.getElementById('editar-item-subtotal').textContent = formatCurrency(subtotal);
         }
 
         // Event listeners para atualizar subtotal em tempo real
@@ -1254,21 +1253,21 @@
             const diferenca = novoTotal - totalAtual;
             
             // Atualizar preview
-            document.getElementById('total-atual-lote').textContent = formatMaskedCurrency(totalAtual, currentUser);
-            document.getElementById('novo-total-lote').textContent = formatMaskedCurrency(novoTotal, currentUser);
+            document.getElementById('total-atual-lote').textContent = formatCurrency(totalAtual);
+            document.getElementById('novo-total-lote').textContent = formatCurrency(novoTotal);
             
             const diferencaElement = document.getElementById('diferenca-lote');
-            diferencaElement.textContent = formatMaskedCurrency(Math.abs(diferenca), currentUser);
+            diferencaElement.textContent = formatCurrency(Math.abs(diferenca));
             
             if (diferenca > 0) {
                 diferencaElement.className = 'font-bold text-green-600';
-                diferencaElement.textContent = '+ ' + formatMaskedCurrency(diferenca, currentUser);
+                diferencaElement.textContent = '+ ' + formatCurrency(diferenca);
             } else if (diferenca < 0) {
                 diferencaElement.className = 'font-bold text-red-600';
-                diferencaElement.textContent = '- ' + formatMaskedCurrency(Math.abs(diferenca), currentUser);
+                diferencaElement.textContent = '- ' + formatCurrency(Math.abs(diferenca));
             } else {
                 diferencaElement.className = 'font-bold text-gray-600';
-                diferencaElement.textContent = formatMaskedCurrency(0, currentUser);
+                diferencaElement.textContent = formatCurrency(0);
             }
             
             previewElement.classList.remove('hidden');
@@ -1287,24 +1286,35 @@
             }
 
             const itensData = JSON.parse(selectedOption.dataset.itens);
+            const itemIds = itensData.map(item => item.id).filter(Boolean);
             
-            if (!confirm(`Tem certeza que deseja alterar o preço de TODOS os ${itensData.length} itens deste produto para ${formatMaskedCurrency(novoPreco, currentUser)}?`)) {
+            if (!confirm(`Tem certeza que deseja alterar o preço de TODOS os ${itensData.length} itens deste produto para ${formatCurrency(novoPreco)}?`)) {
                 return;
             }
 
             try {
                 showLoading(true);
                 
-                // Atualizar cada item do produto
-                for (const item of itensData) {
-                    const { error } = await supabase
-                        .from('pedido_itens')
-                        .update({ preco_unitario: novoPreco })
-                        .eq('id', item.id);
+                if (itemIds.length === 0) {
+                    throw new Error('Nenhum item válido foi encontrado para atualização em lote.');
+                }
 
-                    if (error) {
-                        throw new Error(`Erro ao atualizar item: ${error.message}`);
-                    }
+                const { data: itensAtualizados, error } = await supabase
+                    .from('pedido_itens')
+                    .update({ preco_unitario: novoPreco })
+                    .in('id', itemIds)
+                    .select('id, preco_unitario');
+
+                if (error) {
+                    throw new Error(`Erro ao atualizar itens: ${error.message}`);
+                }
+
+                if (!itensAtualizados || itensAtualizados.length === 0) {
+                    throw new Error('Nenhum item foi atualizado. Verifique suas permissões ou o status do pedido.');
+                }
+
+                if (itensAtualizados.length !== itemIds.length) {
+                    throw new Error(`Somente ${itensAtualizados.length} de ${itemIds.length} itens foram atualizados. Verifique suas permissões.`);
                 }
                 
                 // Recalcular total do pedido
