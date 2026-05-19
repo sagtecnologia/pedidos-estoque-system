@@ -132,9 +132,9 @@ async function criarPrePedido(dadosPedido) {
         // Gerar token único
         const token = gerarTokenPublico();
         
-        // Calcular data de expiração (24 horas)
+        // Calcular data de expiração (48 horas)
         const dataExpiracao = new Date();
-        dataExpiracao.setHours(dataExpiracao.getHours() + 24);
+        dataExpiracao.setHours(dataExpiracao.getHours() + 48);
 
         // Calcular total
         const total = dadosPedido.itens.reduce((sum, item) => 
@@ -361,7 +361,7 @@ async function rejeitarPrePedido(id, motivo) {
 }
 
 /**
- * Reativar pré-pedido expirado por mais 24h
+ * Reativar pré-pedido expirado por mais 48h
  */
 async function reativarPrePedido(id) {
     const prePedido = await obterPrePedido(id);
@@ -371,7 +371,7 @@ async function reativarPrePedido(id) {
     }
 
     const novaDataExpiracao = new Date();
-    novaDataExpiracao.setHours(novaDataExpiracao.getHours() + 24);
+    novaDataExpiracao.setHours(novaDataExpiracao.getHours() + 48);
 
     return await atualizarStatusPrePedido(id, 'PENDENTE', {
         data_expiracao: novaDataExpiracao.toISOString(),
@@ -696,7 +696,7 @@ async function gerarPedidoVenda(prePedidoId, clienteId, observacoesEstoque = '')
 }
 
 /**
- * Expirar pré-pedidos antigos (24h)
+ * Expirar pré-pedidos antigos
  */
 async function expirarPrePedidosAntigos() {
     try {

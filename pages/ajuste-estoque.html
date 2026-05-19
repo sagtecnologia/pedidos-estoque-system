@@ -21,7 +21,7 @@
                         <i class="fas fa-sliders-h text-blue-600"></i>
                         Ajuste de Estoque
                     </h2>
-                    <p class="text-gray-500 mt-1">Escolha o produto, selecione o sabor e informe o novo estoque desejado</p>
+                    <p class="text-gray-500 mt-1">Informe o produto para listar os sabores e ajustar as quantidades</p>
                 </div>
                 <div class="flex gap-3 flex-shrink-0">
                     <button onclick="abrirHistorico()"
@@ -36,46 +36,26 @@
             </div>
 
             <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5 mb-4">
-                <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+                <div class="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-end">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Produto</label>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Informe o produto</label>
                         <div class="relative">
                             <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none"></i>
-                            <input id="filter-busca" type="text" placeholder="Buscar produto ou sabor..."
+                            <input type="hidden" id="produto-selecionado-id">
+                            <input id="filter-busca" type="text" placeholder="Digite e selecione o produto..."
                                 class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                                oninput="aplicarFiltros()">
+                                onfocus="openProdutoDropdown()"
+                                onclick="openProdutoDropdown()"
+                                oninput="handleProdutoInput()"
+                                onblur="handleProdutoBlur()"
+                                autocomplete="off">
+                            <div id="produto-dropdown" class="hidden absolute z-30 mt-1 w-full max-h-72 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg"></div>
                         </div>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Marca</label>
-                        <select id="filter-marca"
-                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-                            onchange="aplicarFiltros()">
-                            <option value="">Todas as marcas</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
-                        <select id="filter-categoria"
-                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-                            onchange="aplicarFiltros()">
-                            <option value="">Todas as categorias</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-1">Situacao</label>
-                        <select id="filter-situacao"
-                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-                            onchange="aplicarFiltros()">
-                            <option value="">Todos</option>
-                            <option value="com">Com estoque</option>
-                            <option value="sem">Sem estoque (zerado)</option>
-                        </select>
-                    </div>
-                    <div>
                         <button onclick="limparFiltros()"
-                            class="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600 font-medium text-sm transition">
-                            <i class="fas fa-broom"></i> Limpar Filtros
+                            class="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600 font-medium text-sm transition">
+                            <i class="fas fa-broom"></i> Limpar
                         </button>
                     </div>
                 </div>
@@ -90,7 +70,7 @@
             <div class="space-y-4 lg:hidden" id="ajuste-cards">
                 <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 text-center text-gray-400">
                     <i class="fas fa-spinner fa-spin text-2xl mb-2 block"></i>
-                    Carregando produtos...
+                    Informe um produto para listar os sabores.
                 </div>
             </div>
 
@@ -113,7 +93,7 @@
                             <tr>
                                 <td colspan="8" class="px-6 py-12 text-center text-gray-400">
                                     <i class="fas fa-spinner fa-spin text-2xl mb-2 block"></i>
-                                    Carregando produtos...
+                                    Informe um produto para listar os sabores.
                                 </td>
                             </tr>
                         </tbody>
@@ -167,6 +147,7 @@
         let produtosFiltrados = [];
         let ajustesPendentes = {};
         let selecaoSaborPorProduto = {};
+        let produtoSelecionadoId = null;
 
         const MOTIVOS_AJUSTE = [
             'Correcao de Inventario',
@@ -182,7 +163,7 @@
             await initNavbar();
             await initSidebar();
 
-            await Promise.all([carregarFiltros(), carregarSabores()]);
+            await carregarSabores();
         })();
 
         async function carregarFiltros() {
@@ -259,47 +240,122 @@
                 .sort((a, b) => (a.produto.nome || '').localeCompare(b.produto.nome || '', 'pt-BR'));
         }
 
-        function aplicarFiltros() {
-            const busca = document.getElementById('filter-busca').value.toLowerCase().trim();
-            const marca = document.getElementById('filter-marca').value;
-            const categoria = document.getElementById('filter-categoria').value;
-            const situacao = document.getElementById('filter-situacao').value;
+        function getProdutosDisponiveis() {
+            return agruparSaboresPorProduto(todosSabores).map(grupo => ({
+                ...grupo.produto,
+                totalSabores: grupo.sabores.length
+            }));
+        }
 
-            const saboresFiltrados = todosSabores.filter(sabor => {
-                const produto = sabor.produto;
-                const quantidade = parseFloat(sabor.quantidade) || 0;
+        function getProdutoLabel(produto) {
+            if (!produto) return '';
+            const codigo = produto.codigo ? `SKU: ${produto.codigo}` : 'Sem SKU';
+            return `${produto.nome || 'Produto sem nome'} | ${codigo}`;
+        }
 
-                if (marca && produto.marca !== marca) return false;
-                if (categoria && produto.categoria !== categoria) return false;
-                if (situacao === 'com' && quantidade <= 0) return false;
-                if (situacao === 'sem' && quantidade > 0) return false;
+        function getProdutoSelecionado() {
+            if (!produtoSelecionadoId) return null;
+            return getProdutosDisponiveis().find(produto => produto.id === produtoSelecionadoId) || null;
+        }
 
-                if (busca) {
-                    const textoBusca = `${produto.nome} ${produto.codigo || ''} ${sabor.sabor || ''}`.toLowerCase();
-                    if (!textoBusca.includes(busca)) return false;
+        function openProdutoDropdown() {
+            filterProdutoDropdown();
+            document.getElementById('produto-dropdown').classList.remove('hidden');
+        }
+
+        function closeProdutoDropdown() {
+            document.getElementById('produto-dropdown').classList.add('hidden');
+        }
+
+        function filterProdutoDropdown() {
+            const input = document.getElementById('filter-busca');
+            const dropdown = document.getElementById('produto-dropdown');
+            const termo = (input.value || '').trim().toLowerCase();
+            const produtos = getProdutosDisponiveis()
+                .filter(produto => {
+                    const texto = `${produto.nome || ''} ${produto.codigo || ''} ${produto.marca || ''} ${produto.categoria || ''}`.toLowerCase();
+                    return !termo || texto.includes(termo);
+                })
+                .slice(0, 50);
+
+            if (produtos.length === 0) {
+                dropdown.innerHTML = '<div class="px-3 py-3 text-sm text-gray-500">Nenhum produto encontrado.</div>';
+                return;
+            }
+
+            dropdown.innerHTML = produtos.map(produto => `
+                <button type="button"
+                    class="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
+                    data-produto-id="${produto.id}"
+                    onclick="selecionarProdutoAjuste(this.dataset.produtoId)">
+                    <div class="text-sm font-medium text-gray-800">${produto.nome || 'Produto sem nome'}</div>
+                    <div class="text-xs text-gray-500">
+                        ${produto.codigo ? `SKU: ${produto.codigo}` : 'Sem SKU'}
+                        ${produto.marca ? ` | ${produto.marca}` : ''}
+                        ${produto.categoria ? ` | ${produto.categoria}` : ''}
+                        | ${produto.totalSabores} sabor${produto.totalSabores !== 1 ? 'es' : ''}
+                    </div>
+                </button>
+            `).join('');
+        }
+
+        function selecionarProdutoAjuste(produtoId) {
+            const produto = getProdutosDisponiveis().find(item => item.id === produtoId);
+            if (!produto) return;
+
+            produtoSelecionadoId = produto.id;
+            document.getElementById('produto-selecionado-id').value = produto.id;
+            document.getElementById('filter-busca').value = getProdutoLabel(produto);
+            closeProdutoDropdown();
+            aplicarFiltros();
+        }
+
+        function handleProdutoInput() {
+            const produto = getProdutoSelecionado();
+            const input = document.getElementById('filter-busca');
+
+            if (!produto || input.value !== getProdutoLabel(produto)) {
+                produtoSelecionadoId = null;
+                document.getElementById('produto-selecionado-id').value = '';
+                produtosFiltrados = [];
+                renderizar();
+            }
+
+            filterProdutoDropdown();
+            document.getElementById('produto-dropdown').classList.remove('hidden');
+        }
+
+        function handleProdutoBlur() {
+            window.setTimeout(() => {
+                const produto = getProdutoSelecionado();
+                const input = document.getElementById('filter-busca');
+
+                if (produto) {
+                    input.value = getProdutoLabel(produto);
                 }
 
-                return true;
-            });
+                closeProdutoDropdown();
+            }, 150);
+        }
+
+        function aplicarFiltros() {
+            if (!produtoSelecionadoId) {
+                produtosFiltrados = [];
+                renderizar();
+                return;
+            }
+
+            const saboresFiltrados = todosSabores.filter(sabor => sabor.produto?.id === produtoSelecionadoId);
 
             produtosFiltrados = agruparSaboresPorProduto(saboresFiltrados);
-
-            produtosFiltrados.forEach(grupo => {
-                const saborAtual = selecaoSaborPorProduto[grupo.produto.id];
-                const existe = grupo.sabores.some(sabor => sabor.id === saborAtual);
-                if (!existe) {
-                    selecaoSaborPorProduto[grupo.produto.id] = grupo.sabores[0]?.id || null;
-                }
-            });
-
             renderizar();
         }
 
         function limparFiltros() {
             document.getElementById('filter-busca').value = '';
-            document.getElementById('filter-marca').value = '';
-            document.getElementById('filter-categoria').value = '';
-            document.getElementById('filter-situacao').value = '';
+            document.getElementById('produto-selecionado-id').value = '';
+            produtoSelecionadoId = null;
+            produtosFiltrados = [];
             aplicarFiltros();
         }
 
@@ -803,6 +859,273 @@
                 diff,
                 motivo
             );
+
+            if (ok) {
+                showToast('Ajuste salvo com sucesso!', 'success');
+                aplicarFiltros();
+            }
+        }
+
+        function getDiffClass(diff) {
+            return diff > 0
+                ? 'font-semibold text-green-600'
+                : diff < 0
+                    ? 'font-semibold text-red-600'
+                    : 'text-gray-400';
+        }
+
+        function getSaborById(saborId) {
+            return todosSabores.find(item => item.id === saborId) || null;
+        }
+
+        function renderizar() {
+            const tbody = document.getElementById('tbody-ajuste');
+            const cards = document.getElementById('ajuste-cards');
+            const busca = document.getElementById('filter-busca').value.trim();
+
+            if (produtosFiltrados.length === 0) {
+                const mensagem = busca && !produtoSelecionadoId
+                    ? 'Selecione um produto da lista para carregar os sabores.'
+                    : busca
+                    ? 'Nenhum produto encontrado para a busca informada.'
+                    : 'Informe um produto para listar os sabores.';
+
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" class="px-6 py-12 text-center text-gray-400">
+                            <i class="fas fa-box-open text-3xl mb-3 block"></i>
+                            ${mensagem}
+                        </td>
+                    </tr>`;
+                cards.innerHTML = `
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 text-center text-gray-400">
+                        <i class="fas fa-box-open text-3xl mb-3 block"></i>
+                        ${mensagem}
+                    </div>`;
+                atualizarContador();
+                return;
+            }
+
+            const rowsHtml = produtosFiltrados.map(grupo => {
+                const produto = grupo.produto;
+                const sku = produto.codigo || '-';
+
+                return grupo.sabores.map(sabor => {
+                    const estoqueAtual = parseFloat(sabor.quantidade) || 0;
+                    const ajuste = ajustesPendentes[sabor.id];
+                    const novoEstoqueVal = ajuste ? ajuste.novoEstoque : '';
+                    const motivoSelecionado = ajuste ? ajuste.motivo : MOTIVOS_AJUSTE[0];
+                    const diff = novoEstoqueVal !== '' ? parseFloat(novoEstoqueVal) - estoqueAtual : 0;
+                    const diffStr = novoEstoqueVal !== '' ? `${diff >= 0 ? '+' : ''}${diff.toFixed(2)}` : '0.00';
+                    const temAjuste = novoEstoqueVal !== '' && diff !== 0;
+
+                    return `
+                        <tr id="row-sabor-${sabor.id}" class="hover:bg-gray-50 transition-colors ${temAjuste ? 'bg-blue-50 border-l-4 border-blue-400' : ''}">
+                            <td class="px-3 py-4 align-middle">
+                                <div class="font-semibold text-gray-900 text-sm leading-5">${produto.nome}</div>
+                                <div class="text-[11px] text-gray-500 mt-0.5">SKU: ${sku}</div>
+                            </td>
+                            <td class="px-3 py-4 align-middle">
+                                <div class="text-sm font-medium text-gray-800 leading-5 break-words">${produto.marca || '-'}</div>
+                                <div class="text-[11px] text-gray-500 uppercase mt-0.5 break-words">${produto.categoria || '-'}</div>
+                            </td>
+                            <td class="px-3 py-4 align-middle">
+                                <div class="text-sm font-semibold text-gray-900">${sabor.sabor || 'Sem sabor'}</div>
+                            </td>
+                            <td class="px-3 py-4 text-center align-middle">
+                                <span class="text-sm font-bold text-gray-800">${estoqueAtual.toFixed(2)}</span>
+                            </td>
+                            <td class="px-3 py-4 text-center align-middle">
+                                <input id="novo-estoque-sabor-${sabor.id}" type="number" min="0" step="0.01" value="${novoEstoqueVal}" placeholder="-"
+                                    class="h-8 w-24 text-center px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs bg-white"
+                                    oninput="onNovoEstoqueInputSabor('${sabor.id}', this.value)"
+                                    onchange="onNovoEstoqueInputSabor('${sabor.id}', this.value)">
+                            </td>
+                            <td class="px-3 py-4 text-center align-middle">
+                                <span id="diff-sabor-${sabor.id}" class="text-xs ${getDiffClass(diff)}">${diffStr}</span>
+                            </td>
+                            <td class="px-3 py-4 align-middle">
+                                <select id="motivo-sabor-${sabor.id}"
+                                    class="h-8 w-full px-2 py-1.5 border border-gray-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 bg-white"
+                                    onchange="onMotivoChangeSabor('${sabor.id}', this.value)">
+                                    ${MOTIVOS_AJUSTE.map(motivo => `
+                                        <option value="${motivo}" ${motivoSelecionado === motivo ? 'selected' : ''}>${motivo}</option>
+                                    `).join('')}
+                                </select>
+                            </td>
+                            <td class="px-3 py-4 text-center align-middle">
+                                <button onclick="salvarAjusteSabor('${sabor.id}')"
+                                    class="inline-flex h-8 items-center gap-1 mx-auto px-2.5 py-1.5 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-100 text-xs font-medium transition whitespace-nowrap">
+                                    <i class="fas fa-save text-xs"></i> Salvar
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }).join('');
+
+            const cardsHtml = produtosFiltrados.map(grupo => {
+                const produto = grupo.produto;
+                const sku = produto.codigo || '-';
+
+                return grupo.sabores.map(sabor => {
+                    const estoqueAtual = parseFloat(sabor.quantidade) || 0;
+                    const ajuste = ajustesPendentes[sabor.id];
+                    const novoEstoqueVal = ajuste ? ajuste.novoEstoque : '';
+                    const motivoSelecionado = ajuste ? ajuste.motivo : MOTIVOS_AJUSTE[0];
+                    const diff = novoEstoqueVal !== '' ? parseFloat(novoEstoqueVal) - estoqueAtual : 0;
+                    const diffStr = novoEstoqueVal !== '' ? `${diff >= 0 ? '+' : ''}${diff.toFixed(2)}` : '0.00';
+
+                    return `
+                        <div id="row-card-sabor-${sabor.id}" class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 space-y-4 ${novoEstoqueVal !== '' && diff !== 0 ? 'border-blue-300 bg-blue-50' : ''}">
+                            <div>
+                                <div class="font-semibold text-gray-900">${produto.nome}</div>
+                                <div class="text-xs text-gray-500 mt-1">SKU: ${sku}</div>
+                                <div class="text-xs text-gray-400 mt-1">${produto.marca || '-'} | ${produto.categoria || '-'}</div>
+                            </div>
+                            <div class="rounded-xl bg-gray-50 px-3 py-2">
+                                <div class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Sabor</div>
+                                <div class="font-semibold text-gray-900">${sabor.sabor || 'Sem sabor'}</div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3 text-sm">
+                                <div class="rounded-xl bg-gray-50 px-3 py-2">
+                                    <div class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Estoque atual</div>
+                                    <div class="font-semibold text-gray-900">${estoqueAtual.toFixed(2)}</div>
+                                </div>
+                                <div class="rounded-xl bg-gray-50 px-3 py-2">
+                                    <div class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Diferenca</div>
+                                    <div id="diff-card-sabor-${sabor.id}" class="${getDiffClass(diff)}">${diffStr}</div>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">Novo estoque</label>
+                                    <input id="novo-estoque-card-sabor-${sabor.id}" type="number" min="0" step="0.01" value="${novoEstoqueVal}" placeholder="-"
+                                        class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-center shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        oninput="onNovoEstoqueInputSabor('${sabor.id}', this.value)"
+                                        onchange="onNovoEstoqueInputSabor('${sabor.id}', this.value)">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">Motivo</label>
+                                    <select id="motivo-card-sabor-${sabor.id}"
+                                        class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 bg-white"
+                                        onchange="onMotivoChangeSabor('${sabor.id}', this.value)">
+                                        ${MOTIVOS_AJUSTE.map(motivo => `
+                                            <option value="${motivo}" ${motivoSelecionado === motivo ? 'selected' : ''}>${motivo}</option>
+                                        `).join('')}
+                                    </select>
+                                </div>
+                            </div>
+                            <button onclick="salvarAjusteSabor('${sabor.id}')"
+                                class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 text-sm font-medium transition">
+                                <i class="fas fa-save text-xs"></i> Salvar ajuste
+                            </button>
+                        </div>
+                    `;
+                }).join('');
+            }).join('');
+
+            tbody.innerHTML = rowsHtml;
+            cards.innerHTML = cardsHtml;
+            atualizarContador();
+        }
+
+        function atualizarDiffSabor(saborId, valor) {
+            const sabor = getSaborById(saborId);
+            if (!sabor) return;
+
+            const estoqueAtual = parseFloat(sabor.quantidade) || 0;
+            const diff = valor !== '' ? parseFloat(valor) - estoqueAtual : 0;
+            const diffStr = valor !== '' ? `${diff >= 0 ? '+' : ''}${diff.toFixed(2)}` : '0.00';
+
+            [`diff-sabor-${saborId}`, `diff-card-sabor-${saborId}`].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.textContent = diffStr;
+                    el.className = getDiffClass(diff);
+                }
+            });
+
+            [`row-sabor-${saborId}`, `row-card-sabor-${saborId}`].forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                const temAjuste = valor !== '' && !isNaN(parseFloat(valor)) && parseFloat(valor) !== estoqueAtual;
+                el.classList.toggle('bg-blue-50', temAjuste);
+                el.classList.toggle('border-l-4', temAjuste && id.startsWith('row-sabor-'));
+                el.classList.toggle('border-blue-400', temAjuste && id.startsWith('row-sabor-'));
+                el.classList.toggle('border-blue-300', temAjuste && id.startsWith('row-card-'));
+            });
+        }
+
+        function onNovoEstoqueInputSabor(saborId, valor) {
+            const sabor = getSaborById(saborId);
+            if (!sabor) return;
+
+            const estoqueAtual = parseFloat(sabor.quantidade) || 0;
+            const novoEstoque = parseFloat(valor);
+
+            if (valor !== '' && !isNaN(novoEstoque) && novoEstoque !== estoqueAtual) {
+                const motivo =
+                    document.getElementById(`motivo-sabor-${saborId}`)?.value ||
+                    document.getElementById(`motivo-card-sabor-${saborId}`)?.value ||
+                    MOTIVOS_AJUSTE[0];
+
+                ajustesPendentes[saborId] = { novoEstoque, motivo };
+            } else {
+                delete ajustesPendentes[saborId];
+            }
+
+            atualizarDiffSabor(saborId, valor);
+            atualizarContador();
+        }
+
+        function onMotivoChangeSabor(saborId, valor) {
+            if (ajustesPendentes[saborId]) {
+                ajustesPendentes[saborId].motivo = valor;
+            }
+        }
+
+        function atualizarContador() {
+            const produtos = produtosFiltrados.length;
+            const sabores = produtosFiltrados.reduce((acc, grupo) => acc + grupo.sabores.length, 0);
+            const pendentes = Object.keys(ajustesPendentes).length;
+
+            document.getElementById('contador-exibidos').textContent =
+                `${produtos} produto${produtos !== 1 ? 's' : ''} / ${sabores} sabor${sabores !== 1 ? 'es' : ''} exibido${sabores !== 1 ? 's' : ''}`;
+            document.getElementById('contador-pendentes').textContent =
+                `${pendentes} ajuste${pendentes !== 1 ? 's' : ''} pendente${pendentes !== 1 ? 's' : ''}`;
+        }
+
+        async function salvarAjusteSabor(saborId) {
+            const sabor = getSaborById(saborId);
+            const input =
+                document.getElementById(`novo-estoque-sabor-${saborId}`) ||
+                document.getElementById(`novo-estoque-card-sabor-${saborId}`);
+
+            if (!sabor || !input || input.value === '') {
+                showToast('Informe o novo valor de estoque antes de salvar.', 'warning');
+                return;
+            }
+
+            const novoEstoque = parseFloat(input.value);
+            if (isNaN(novoEstoque) || novoEstoque < 0) {
+                showToast('Valor de estoque invalido.', 'error');
+                return;
+            }
+
+            const estoqueAtual = parseFloat(sabor.quantidade) || 0;
+            const diff = novoEstoque - estoqueAtual;
+
+            if (diff === 0) {
+                showToast('Nenhuma diferenca detectada. O estoque ja esta com esse valor.', 'info');
+                return;
+            }
+
+            const motivo =
+                document.getElementById(`motivo-sabor-${saborId}`)?.value ||
+                document.getElementById(`motivo-card-sabor-${saborId}`)?.value ||
+                MOTIVOS_AJUSTE[0];
+            const ok = await executarAjuste(sabor.id, sabor.produto.id, estoqueAtual, novoEstoque, diff, motivo);
 
             if (ok) {
                 showToast('Ajuste salvo com sucesso!', 'success');
