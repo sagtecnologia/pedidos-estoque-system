@@ -511,6 +511,66 @@ async function atualizarItemPrePedido(itemId, dados) {
     }
 }
 
+async function adicionarItemPrePedido(prePedidoId, dados) {
+    try {
+        const { data: prePedido, error: prePedidoError } = await supabase
+            .from('pre_pedidos')
+            .select('id, status')
+            .eq('id', prePedidoId)
+            .single();
+
+        if (prePedidoError) throw prePedidoError;
+
+        if (!['PENDENTE', 'EM_ANALISE'].includes(prePedido?.status)) {
+            throw new Error('Apenas pre-pedidos pendentes ou em analise podem receber novos itens');
+        }
+
+        const { data: sabor, error: saborError } = await supabase
+            .from('produto_sabores')
+            .select('id, produto_id, quantidade, ativo')
+            .eq('id', dados.sabor_id)
+            .single();
+
+        if (saborError) throw saborError;
+
+        if (!sabor || sabor.ativo !== true || sabor.produto_id !== dados.produto_id) {
+            throw new Error('Produto/sabor invalido para inclusao no pre-pedido');
+        }
+
+        const quantidade = parseFloat(dados.quantidade) || 0;
+        const estoqueDisponivel = parseFloat(sabor.quantidade) || 0;
+
+        if (estoqueDisponivel <= 0) {
+            throw new Error('Este produto/sabor esta sem estoque disponivel');
+        }
+
+        if (quantidade <= 0 || quantidade > estoqueDisponivel) {
+            throw new Error(`Quantidade maior que o estoque disponivel (${estoqueDisponivel})`);
+        }
+
+        const { data, error } = await supabase
+            .from('pre_pedido_itens')
+            .insert({
+                pre_pedido_id: prePedidoId,
+                produto_id: dados.produto_id,
+                sabor_id: dados.sabor_id || null,
+                quantidade,
+                preco_unitario: dados.preco_unitario,
+                estoque_disponivel_momento: estoqueDisponivel
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        await recalcularTotalPrePedido(prePedidoId);
+        return data;
+    } catch (error) {
+        console.error('Erro ao adicionar item ao pre-pedido:', error);
+        throw error;
+    }
+}
+
 async function listarOpcoesItensPrePedido() {
     try {
         const { data, error } = await supabase
