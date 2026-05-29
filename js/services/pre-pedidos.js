@@ -36,6 +36,29 @@ async function listarProdutosPublicos(filtros = {}) {
     }
 }
 
+async function desfazerPedidoVendaGerado(prePedidoId, pedidoId, statusAnterior = 'EM_ANALISE') {
+    await supabase
+        .from('pre_pedidos')
+        .update({
+            status: statusAnterior,
+            pedido_gerado_id: null,
+            cliente_vinculado_id: null,
+            data_analise: null
+        })
+        .eq('id', prePedidoId)
+        .eq('pedido_gerado_id', pedidoId);
+
+    await supabase
+        .from('pedido_itens')
+        .delete()
+        .eq('pedido_id', pedidoId);
+
+    await supabase
+        .from('pedidos')
+        .delete()
+        .eq('id', pedidoId);
+}
+
 /**
  * Listar sabores disponíveis publicamente
  */
@@ -659,7 +682,7 @@ async function gerarPedidoVenda(prePedidoId, clienteId, observacoesEstoque = '')
         // 1. Buscar pré-pedido com itens
         const prePedido = await obterPrePedido(prePedidoId);
         
-        if (prePedido.status !== 'PENDENTE' && prePedido.status !== 'EM_ANALISE') {
+        if (!['PENDENTE', 'EM_ANALISE'].includes(prePedido.status) || prePedido.pedido_gerado_id) {
             throw new Error('Pré-pedido já foi processado');
         }
 
@@ -717,7 +740,33 @@ async function gerarPedidoVenda(prePedidoId, clienteId, observacoesEstoque = '')
         
         if (errorPedido) throw errorPedido;
 
-        // 5. Copiar itens para o pedido (incluindo sabor_id se houver)
+        // 5. Vincular o pre-pedido de forma condicional para impedir duas vendas.
+        const { data: prePedidoAtualizado, error: errorVinculo } = await supabase
+            .from('pre_pedidos')
+            .update({
+                status: 'APROVADO',
+                analisado_por: user.id,
+                data_analise: new Date().toISOString(),
+                cliente_vinculado_id: clienteId,
+                pedido_gerado_id: pedido.id
+            })
+            .eq('id', prePedidoId)
+            .is('pedido_gerado_id', null)
+            .in('status', ['PENDENTE', 'EM_ANALISE'])
+            .select('id')
+            .limit(1);
+
+        if (errorVinculo) {
+            await desfazerPedidoVendaGerado(prePedidoId, pedido.id, prePedido.status);
+            throw errorVinculo;
+        }
+
+        if (!prePedidoAtualizado || prePedidoAtualizado.length === 0) {
+            await desfazerPedidoVendaGerado(prePedidoId, pedido.id, prePedido.status);
+            throw new Error('Este pre-pedido ja foi convertido em venda por outro processo.');
+        }
+
+        // 6. Copiar itens para o pedido (incluindo sabor_id se houver)
         const itensPedido = prePedido.pre_pedido_itens.map(item => ({
             pedido_id: pedido.id,
             produto_id: item.produto_id,
@@ -730,19 +779,10 @@ async function gerarPedidoVenda(prePedidoId, clienteId, observacoesEstoque = '')
             .from('pedido_itens')
             .insert(itensPedido);
         
-        if (errorItens) throw errorItens;
-
-        // 6. Atualizar pré-pedido
-        await supabase
-            .from('pre_pedidos')
-            .update({
-                status: 'APROVADO',
-                analisado_por: user.id,
-                data_analise: new Date().toISOString(),
-                cliente_vinculado_id: clienteId,
-                pedido_gerado_id: pedido.id
-            })
-            .eq('id', prePedidoId);
+        if (errorItens) {
+            await desfazerPedidoVendaGerado(prePedidoId, pedido.id, prePedido.status);
+            throw errorItens;
+        }
 
         return {
             success: true,

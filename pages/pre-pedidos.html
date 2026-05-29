@@ -180,6 +180,7 @@
         let prePedidoEmAnaliseId = null;
         let opcoesItensPrePedido = [];
         let opcoesClientesPrePedido = [];
+        const prePedidosGerandoVenda = new Set();
 
         (async () => {
             await checkAuth();
@@ -647,7 +648,7 @@
                                         </div>
                                         <p class="text-[11px] text-gray-500 mt-1">Clique no campo e digite para pesquisar por nome, telefone, WhatsApp ou email.</p>
                                     </div>
-                                    <button onclick="gerarPedidoVendaModal('${prePedido.id}')" 
+                                    <button id="btn-gerar-venda-${prePedido.id}" onclick="gerarPedidoVendaModal('${prePedido.id}')"
                                             class="w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-bold transition">
                                         Gerar Pedido de Venda
                                     </button>
@@ -677,6 +678,11 @@
         }
 
         async function gerarPedidoVendaModal(prePedidoId) {
+            if (prePedidosGerandoVenda.has(prePedidoId)) {
+                showToast('A geracao da venda deste pre-pedido ja esta em andamento.', 'warning');
+                return;
+            }
+
             const clienteId = document.getElementById('select-cliente').value
                 || resolveClientePrePedidoOption(document.getElementById('select-cliente-busca')?.value)?.id;
             
@@ -692,6 +698,14 @@
             try {
                 showLoading(true);
                 
+                prePedidosGerandoVenda.add(prePedidoId);
+                const botaoGerar = document.getElementById(`btn-gerar-venda-${prePedidoId}`);
+                if (botaoGerar) {
+                    botaoGerar.disabled = true;
+                    botaoGerar.classList.add('opacity-60', 'cursor-not-allowed');
+                    botaoGerar.textContent = 'Gerando...';
+                }
+
                 const resultado = await gerarPedidoVenda(prePedidoId, clienteId);
                 
                 showLoading(false);
@@ -707,6 +721,14 @@
             } catch (error) {
                 showLoading(false);
                 handleError(error, 'Erro ao gerar pedido de venda');
+            } finally {
+                prePedidosGerandoVenda.delete(prePedidoId);
+                const botaoGerarFinal = document.getElementById(`btn-gerar-venda-${prePedidoId}`);
+                if (botaoGerarFinal) {
+                    botaoGerarFinal.disabled = false;
+                    botaoGerarFinal.classList.remove('opacity-60', 'cursor-not-allowed');
+                    botaoGerarFinal.textContent = 'Gerar Pedido de Venda';
+                }
             }
         }
 
@@ -1362,6 +1384,11 @@
         }
 
         async function gerarPedidoVendaModal(prePedidoId) {
+            if (prePedidosGerandoVenda.has(prePedidoId)) {
+                showToast('A geracao da venda deste pre-pedido ja esta em andamento.', 'warning');
+                return;
+            }
+
             const clienteId = document.getElementById('select-cliente').value
                 || resolveClientePrePedidoOption(document.getElementById('select-cliente-busca')?.value)?.id;
             
@@ -1378,6 +1405,14 @@
                 showLoading(true);
                 
                 // Buscar validação de estoque
+                prePedidosGerandoVenda.add(prePedidoId);
+                const botaoGerar = document.getElementById(`btn-gerar-venda-${prePedidoId}`);
+                if (botaoGerar) {
+                    botaoGerar.disabled = true;
+                    botaoGerar.classList.add('opacity-60', 'cursor-not-allowed');
+                    botaoGerar.textContent = 'Gerando...';
+                }
+
                 const validacao = await validarEstoquePrePedido(prePedidoId);
                 const prePedido = await obterPrePedido(prePedidoId);
                 
@@ -1411,6 +1446,14 @@
             } catch (error) {
                 showLoading(false);
                 handleError(error, 'Erro ao gerar pedido de venda');
+            } finally {
+                prePedidosGerandoVenda.delete(prePedidoId);
+                const botaoGerarFinal = document.getElementById(`btn-gerar-venda-${prePedidoId}`);
+                if (botaoGerarFinal) {
+                    botaoGerarFinal.disabled = false;
+                    botaoGerarFinal.classList.remove('opacity-60', 'cursor-not-allowed');
+                    botaoGerarFinal.textContent = 'Gerar Pedido de Venda';
+                }
             }
         }
     </script>
