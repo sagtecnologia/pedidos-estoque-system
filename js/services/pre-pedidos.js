@@ -2,6 +2,12 @@
  * PRÉ-PEDIDOS SERVICE
  * Gerenciamento de pedidos públicos (sem autenticação)
  */
+ 
+function normalizarTipoPrecoItem(tipoPreco) {
+    return ['venda', 'varejo', 'atacado'].includes(tipoPreco)
+        ? tipoPreco
+        : 'venda';
+}
 
 // =====================================================
 // FUNÇÕES PÚBLICAS (SEM AUTENTICAÇÃO)
@@ -194,6 +200,7 @@ async function criarPrePedido(dadosPedido) {
             sabor_id: item.sabor_id || null,
             quantidade: item.quantidade,
             preco_unitario: item.preco_unitario,
+            tipo_preco: normalizarTipoPrecoItem(item.tipo_preco),
             estoque_disponivel_momento: item.estoque_disponivel
         }));
 
@@ -259,6 +266,7 @@ async function listarPrePedidos(filtros = {}) {
                     id,
                     quantidade,
                     preco_unitario,
+                    tipo_preco,
                     subtotal,
                     produto:produtos (nome, marca),
                     sabor:produto_sabores (sabor)
@@ -315,7 +323,9 @@ async function obterPrePedido(id) {
                         nome,
                         marca,
                         estoque_atual,
-                        preco_venda
+                        preco_venda,
+                        preco_varejo,
+                        preco_atacado
                     ),
                     sabor:produto_sabores (
                         id,
@@ -517,6 +527,10 @@ async function atualizarItemPrePedido(itemId, dados) {
             payload.estoque_disponivel_momento = dados.estoque_disponivel_momento;
         }
 
+        if (Object.prototype.hasOwnProperty.call(dados, 'tipo_preco')) {
+            payload.tipo_preco = normalizarTipoPrecoItem(dados.tipo_preco);
+        }
+
         const { data, error } = await supabase
             .from('pre_pedido_itens')
             .update(payload)
@@ -579,6 +593,7 @@ async function adicionarItemPrePedido(prePedidoId, dados) {
                 sabor_id: dados.sabor_id || null,
                 quantidade,
                 preco_unitario: dados.preco_unitario,
+                tipo_preco: normalizarTipoPrecoItem(dados.tipo_preco),
                 estoque_disponivel_momento: estoqueDisponivel
             })
             .select()
@@ -607,6 +622,8 @@ async function listarOpcoesItensPrePedido() {
                     nome,
                     marca,
                     preco_venda,
+                    preco_varejo,
+                    preco_atacado,
                     preco,
                     active
                 )
@@ -772,7 +789,8 @@ async function gerarPedidoVenda(prePedidoId, clienteId, observacoesEstoque = '')
             produto_id: item.produto_id,
             sabor_id: item.sabor_id || null,
             quantidade: item.quantidade,
-            preco_unitario: item.preco_unitario
+            preco_unitario: item.preco_unitario,
+            tipo_preco: normalizarTipoPrecoItem(item.tipo_preco)
         }));
 
         const { error: errorItens } = await supabase

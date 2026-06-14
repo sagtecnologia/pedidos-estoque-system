@@ -356,7 +356,7 @@
                 </div>
 
                 <!-- Seleção de Marca e Produto -->
-                <div class="grid grid-cols-2 gap-4 mb-4 pb-4 border-b">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 pb-4 border-b">
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">Marca*</label>
                         <select id="item-marca" class="w-full px-4 py-2 border border-gray-300 rounded-lg" onchange="carregarProdutosPorMarca()">
@@ -367,6 +367,14 @@
                         <label class="block text-sm font-medium text-gray-700 mb-2">Produto*</label>
                         <select id="item-produto" class="w-full px-4 py-2 border border-gray-300 rounded-lg" onchange="carregarSaboresProduto()" disabled>
                             <option value="">Selecione o produto...</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Tabela de Preço*</label>
+                        <select id="item-tipo-preco" class="w-full px-4 py-2 border border-gray-300 rounded-lg" onchange="atualizarTabelaPrecoVenda()">
+                            <option value="venda">Venda</option>
+                            <option value="varejo">Varejo</option>
+                            <option value="atacado">Atacado</option>
                         </select>
                     </div>
                 </div>
@@ -380,7 +388,7 @@
                     <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                         <div class="flex items-end gap-4">
                             <div class="flex-1">
-                                <label class="block text-sm font-medium text-blue-900 mb-1">Preço de Venda Padrão</label>
+                                <label class="block text-sm font-medium text-blue-900 mb-1">Preço Padrão da Tabela</label>
                                 <input type="number" step="0.01" min="0.01" id="preco-padrao-replicar" 
                                     class="w-full px-3 py-2 border border-blue-300 rounded focus:ring-2 focus:ring-blue-500" 
                                     placeholder="0.00">
@@ -601,6 +609,56 @@
         let saboresTemporarios = []; // Lista temporária de sabores antes de salvar
         let produtoAtual = null; // Produto selecionado no modal
 
+        function normalizarTipoPrecoVenda(tipoPreco) {
+            return ['venda', 'varejo', 'atacado'].includes(tipoPreco)
+                ? tipoPreco
+                : 'venda';
+        }
+
+        function getCampoTipoPrecoVenda(tipoPreco) {
+            const tipoNormalizado = normalizarTipoPrecoVenda(tipoPreco);
+            if (tipoNormalizado === 'varejo') return 'preco_varejo';
+            if (tipoNormalizado === 'atacado') return 'preco_atacado';
+            return 'preco_venda';
+        }
+
+        function obterTipoPrecoSelecionadoVenda() {
+            return normalizarTipoPrecoVenda(document.getElementById('item-tipo-preco')?.value);
+        }
+
+        function obterPrecoProdutoPorTabela(produto, tipoPreco = 'venda') {
+            const tipoNormalizado = normalizarTipoPrecoVenda(tipoPreco);
+
+            if (tipoNormalizado === 'venda') {
+                return parseFloat(produto?.preco_venda ?? produto?.preco ?? 0) || 0;
+            }
+
+            const precoSelecionado = parseFloat(produto?.[getCampoTipoPrecoVenda(tipoNormalizado)]);
+            return Number.isFinite(precoSelecionado) && precoSelecionado > 0 ? precoSelecionado : 0;
+        }
+
+        function atualizarTabelaPrecoVenda() {
+            if (!produtoAtual) {
+                return;
+            }
+
+            const tipoPreco = obterTipoPrecoSelecionadoVenda();
+            const precoBase = obterPrecoProdutoPorTabela(produtoAtual, tipoPreco);
+            produtoAtual.tipo_preco = tipoPreco;
+            produtoAtual.preco = precoBase;
+
+            const precoPadraoInput = document.getElementById('preco-padrao-replicar');
+            if (precoPadraoInput) {
+                precoPadraoInput.value = precoBase > 0 ? precoBase.toFixed(2) : '';
+            }
+
+            document.querySelectorAll('.sabor-preco').forEach(input => {
+                input.value = precoBase > 0 ? precoBase.toFixed(2) : '';
+            });
+
+            calcularTotalVenda();
+        }
+
         (async () => {
             await checkAuth();
             currentUser = await getCurrentUser();
@@ -781,7 +839,10 @@
                     const option = document.createElement('option');
                     option.value = p.id;
                     option.textContent = `${p.nome}`;
-                    option.dataset.preco = p.preco_venda || p.preco || 0;
+                    option.dataset.precoVenda = p.preco_venda || p.preco || 0;
+                    option.dataset.precoVarejo = p.preco_varejo || 0;
+                    option.dataset.precoAtacado = p.preco_atacado || 0;
+                    option.dataset.precoCompra = p.preco_compra || 0;
                     selectProduto.appendChild(option);
                 });
                 
@@ -811,11 +872,17 @@
                 // Pegar dados do produto selecionado
                 const selectProduto = document.getElementById('item-produto');
                 const option = selectProduto.options[selectProduto.selectedIndex];
+                const tipoPreco = obterTipoPrecoSelecionadoVenda();
                 produtoAtual = {
                     id: produtoId,
                     nome: option.textContent,
-                    preco: parseFloat(option.dataset.preco || 0)
+                    preco_venda: parseFloat(option.dataset.precoVenda || 0),
+                    preco_varejo: parseFloat(option.dataset.precoVarejo || 0),
+                    preco_atacado: parseFloat(option.dataset.precoAtacado || 0),
+                    preco_compra: parseFloat(option.dataset.precoCompra || 0),
+                    tipo_preco: tipoPreco
                 };
+                produtoAtual.preco = obterPrecoProdutoPorTabela(produtoAtual, tipoPreco);
                 
                 const sabores = await getSaboresProduto(produtoId);
                 if (sabores.length === 0) {
@@ -829,6 +896,7 @@
                 
                 // Renderizar lista de sabores
                 await renderListaSabores(sabores);
+                atualizarTabelaPrecoVenda();
                 
                 // Mostrar área e botão de salvar
                 areaAdicionar.classList.remove('hidden');
@@ -894,7 +962,7 @@
                         <input type="number" 
                             step="0.01" 
                             min="0.01" 
-                            value="${produtoAtual.preco.toFixed(2)}"
+                            value="${produtoAtual.preco > 0 ? produtoAtual.preco.toFixed(2) : ''}"
                             data-sabor-id="${s.id}"
                             class="sabor-preco w-24 px-2 py-1 border border-gray-300 rounded focus:ring-2 focus:ring-green-500" 
                             placeholder="0.00"
@@ -1024,7 +1092,8 @@
                                 sabor_id: saborId,
                                 sabor_nome: saborNome,
                                 quantidade: quantidade,
-                                preco_unitario: preco
+                                preco_unitario: preco,
+                                tipo_preco: produtoAtual.tipo_preco || 'venda'
                             });
                         }
                     }
@@ -1044,6 +1113,7 @@
                         sabor_id: sabor.sabor_id,
                         quantidade: sabor.quantidade,
                         preco_unitario: sabor.preco_unitario,
+                        tipo_preco: sabor.tipo_preco || produtoAtual.tipo_preco || 'venda',
                         preco_compra_entrada: produtoAtual.preco_compra || 0
                     };
                     
@@ -1087,9 +1157,11 @@
             document.getElementById('barcode-feedback').classList.add('hidden');
             document.getElementById('item-marca').value = '';
             document.getElementById('item-produto').value = '';
+            document.getElementById('item-tipo-preco').value = 'venda';
             document.getElementById('item-produto').disabled = true;
             document.getElementById('item-produto').innerHTML = '<option value="">Selecione o produto...</option>';
             document.getElementById('tbody-sabores-lista').innerHTML = '';
+            document.getElementById('preco-padrao-replicar').value = '';
             document.getElementById('total-venda').textContent = 'R$ 0,00';
             document.getElementById('area-adicionar-sabor').classList.add('hidden');
             document.getElementById('btn-salvar-todos').classList.add('hidden');

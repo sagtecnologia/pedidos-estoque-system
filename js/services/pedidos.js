@@ -132,6 +132,12 @@ async function createPedido(pedido) {
     }
 }
 
+function normalizarTipoPrecoPedido(tipoPreco) {
+    return ['venda', 'varejo', 'atacado'].includes(tipoPreco)
+        ? tipoPreco
+        : 'venda';
+}
+
 // Adicionar item ao pedido
 // Adicionar item ao pedido
 async function addItemPedido(pedidoId, item) {
@@ -154,6 +160,10 @@ async function addItemPedido(pedidoId, item) {
         // Incluir preco_compra_entrada se fornecido (para rastrear custo exato na venda)
         if (item.preco_compra_entrada !== undefined) {
             itemData.preco_compra_entrada = item.preco_compra_entrada;
+        }
+
+        if (item.tipo_preco !== undefined) {
+            itemData.tipo_preco = normalizarTipoPrecoPedido(item.tipo_preco);
         }
 
         const { data, error } = await supabase
