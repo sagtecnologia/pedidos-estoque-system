@@ -18,8 +18,11 @@ async function listMovimentacoes(filters = {}) {
                     cliente:clientes(nome)
                 )
             `)
-            .order('created_at', { ascending: false })
-            .limit(filters.limit || 100);
+            .order('created_at', { ascending: false });
+
+        if (filters.limit) {
+            query = query.limit(filters.limit);
+        }
 
         if (filters.produto_id) {
             query = query.eq('produto_id', filters.produto_id);

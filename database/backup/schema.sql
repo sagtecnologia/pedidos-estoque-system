@@ -2543,6 +2543,342 @@ GRANT ALL ON FUNCTION public.reprocessar_estoque_completo() TO anon;
 GRANT ALL ON FUNCTION public.reprocessar_estoque_completo() TO authenticated;
 GRANT ALL ON FUNCTION public.reprocessar_estoque_completo() TO service_role;
 
+-- DROP FUNCTION public.reprocessar_estoque_produto(uuid);
+
+CREATE OR REPLACE FUNCTION public.reprocessar_estoque_produto(p_produto_id uuid)
+  RETURNS TABLE(pedidos_processados integer, movimentacoes_criadas integer, mensagem text)
+  LANGUAGE plpgsql
+  SECURITY DEFINER
+AS $function$
+DECLARE
+    v_sabor_id uuid;
+    v_total_entradas numeric := 0;
+    v_total_saidas numeric := 0;
+    v_saldo_final numeric := 0;
+    v_qtd_anterior numeric := 0;
+    v_estoque_inicial numeric := 0;
+    v_total_processados INTEGER := 0;
+    v_total_movs INTEGER := 0;
+BEGIN
+    RAISE NOTICE '🔧 BALANÇO COMPLETO DO PRODUTO ID: %', p_produto_id;
+    RAISE NOTICE '════════════════════════════════════════';
+    
+    -- PASSO 1: Capturar totais atuais de movimentações (ANTES de deletar)
+    CREATE TEMP TABLE tmp_balanco AS
+    SELECT 
+        sabor_id,
+        COALESCE(SUM(CASE WHEN tipo = 'ENTRADA' THEN quantidade ELSE 0 END), 0) as total_entradas,
+        COALESCE(SUM(CASE WHEN tipo = 'SAIDA' THEN quantidade ELSE 0 END), 0) as total_saidas
+    FROM estoque_movimentacoes
+    WHERE produto_id = p_produto_id
+    GROUP BY sabor_id;
+    
+    -- PASSO 2: Remover movimentações anteriores deste produto
+    DELETE FROM estoque_movimentacoes WHERE produto_id = p_produto_id;
+    RAISE NOTICE '✓ Movimentações anteriores removidas';
+    
+    -- PASSO 3: Processar cada sabor do produto
+    FOR v_sabor_id IN
+        SELECT ps.id
+        FROM produto_sabores ps
+        WHERE ps.produto_id = p_produto_id AND ps.ativo = true
+    LOOP
+        -- Buscar estoque atual do sabor
+        SELECT COALESCE(quantidade, 0) INTO v_qtd_anterior
+        FROM produto_sabores
+        WHERE id = v_sabor_id;
+        
+        -- Buscar totais já calculados
+        SELECT COALESCE(total_entradas, 0), COALESCE(total_saidas, 0) INTO v_total_entradas, v_total_saidas
+        FROM tmp_balanco
+        WHERE sabor_id = v_sabor_id;
+        
+        -- Se não houver movimentações anteriores, valores ficam 0
+        IF v_total_entradas IS NULL THEN v_total_entradas := 0; END IF;
+        IF v_total_saidas IS NULL THEN v_total_saidas := 0; END IF;
+        
+        -- SALDO FINAL = estoque_atual_banco + entradas - saídas
+        v_saldo_final := v_qtd_anterior + v_total_entradas - v_total_saidas;
+        
+        -- IMPORTANTE: Não normalizar estoque_inicial para evitar movimentações espúrias
+        -- O estoque_inicial (estoque_anterior) será o valor REAL do banco no momento do reprocessamento
+        v_estoque_inicial := v_qtd_anterior;
+        
+        -- Se o saldo der negativo, registrar ajuste para equilibrar (não deixar negativo)
+        IF v_saldo_final < 0 THEN
+            RAISE NOTICE '⚠️ Ajuste necessário no sabor %: saldo calculado = % (ajustando para 0)', v_sabor_id, v_saldo_final;
+            v_saldo_final := 0;
+        END IF;
+        
+        RAISE NOTICE '📊 Sabor %: Estoque Atual=% | Entradas=% | Saídas=% | Saldo Final=%',
+            v_sabor_id, v_qtd_anterior, v_total_entradas, v_total_saidas, v_saldo_final;
+        
+        -- Atualizar quantidade do sabor com o saldo final
+        UPDATE produto_sabores
+        SET quantidade = v_saldo_final
+        WHERE id = v_sabor_id;
+        
+        -- Reconstruir movimentações para este sabor
+        -- 1. Movimentação de Entrada (total de entradas)
+        IF v_total_entradas > 0 THEN
+            INSERT INTO estoque_movimentacoes (
+                produto_id, sabor_id, tipo, quantidade,
+                estoque_anterior, estoque_novo,
+                usuario_id, pedido_id, observacao,
+                created_at
+            ) VALUES (
+                p_produto_id,
+                v_sabor_id,
+                'ENTRADA',
+                v_total_entradas,
+                v_estoque_inicial,
+                v_saldo_final,
+                NULL,
+                NULL,
+                'Reprocessamento - Total de Entradas',
+                NOW()
+            );
+            v_total_movs := v_total_movs + 1;
+        END IF;
+        
+        -- 2. Movimentação de Saída (total de saídas)
+        IF v_total_saidas > 0 THEN
+            INSERT INTO estoque_movimentacoes (
+                produto_id, sabor_id, tipo, quantidade,
+                estoque_anterior, estoque_novo,
+                usuario_id, pedido_id, observacao,
+                created_at
+            ) VALUES (
+                p_produto_id,
+                v_sabor_id,
+                'SAIDA',
+                v_total_saidas,
+                v_estoque_inicial,
+                v_saldo_final,
+                NULL,
+                NULL,
+                'Reprocessamento - Total de Saídas',
+                NOW()
+            );
+            v_total_movs := v_total_movs + 1;
+        END IF;
+        
+        -- 3. Se houve ajuste para corrigir negativo, registrar
+        IF v_qtd_anterior + v_total_entradas - v_total_saidas < 0 THEN
+            INSERT INTO estoque_movimentacoes (
+                produto_id, sabor_id, tipo, quantidade,
+                estoque_anterior, estoque_novo,
+                usuario_id, pedido_id, observacao,
+                created_at
+            ) VALUES (
+                p_produto_id,
+                v_sabor_id,
+                'AJUSTE',
+                ABS(v_qtd_anterior + v_total_entradas - v_total_saidas),
+                0,
+                0,
+                NULL,
+                NULL,
+                'Reprocessamento - Ajuste para correção de saldo negativo',
+                NOW()
+            );
+            v_total_movs := v_total_movs + 1;
+        END IF;
+        
+        v_total_processados := v_total_processados + 1;
+    END LOOP;
+    
+    -- Limpar tabela temporária
+    DROP TABLE IF EXISTS tmp_balanco;
+    
+    RAISE NOTICE '';
+    RAISE NOTICE '════════════════════════════════════════';
+    RAISE NOTICE '✅ BALANÇO COMPLETO CONCLUÍDO!';
+    RAISE NOTICE '   Sabores processados: %', v_total_processados;
+    RAISE NOTICE '   Movimentações criadas: %', v_total_movs;
+    RAISE NOTICE '════════════════════════════════════════';
+    
+    RETURN QUERY SELECT 
+        v_total_processados,
+        v_total_movs,
+        'Balanço completo do produto concluído!'::TEXT;
+END;
+$function$
+;
+
+-- Permissions
+
+ALTER FUNCTION public.reprocessar_estoque_produto OWNER TO postgres;
+GRANT ALL ON FUNCTION public.reprocessar_estoque_produto TO postgres;
+GRANT ALL ON FUNCTION public.reprocessar_estoque_produto TO anon;
+GRANT ALL ON FUNCTION public.reprocessar_estoque_produto TO authenticated;
+GRANT ALL ON FUNCTION public.reprocessar_estoque_produto TO service_role;
+
+-- DROP FUNCTION public.reconstruir_historico_produto(uuid);
+
+CREATE OR REPLACE FUNCTION public.reconstruir_historico_produto(p_produto_id uuid)
+  RETURNS TABLE(pedidos_processados integer, movimentacoes_criadas integer, mensagem text)
+  LANGUAGE plpgsql
+  SECURITY DEFINER
+AS $function$
+DECLARE
+    v_sabor_id uuid;
+    v_mov RECORD;
+    v_total_processados INTEGER := 0;
+    v_total_movs INTEGER := 0;
+    v_ajustes_count INTEGER := 0;
+    v_estoque_inicio numeric;
+    v_saldo numeric;
+    v_delta numeric;
+BEGIN
+    RAISE NOTICE '🔧 RECONSTRUINDO HISTÓRICO DO PRODUTO ID: %', p_produto_id;
+    RAISE NOTICE '════════════════════════════════════════';
+    
+    -- PASSO 1: Preservar ajustes manuais (tipo = AJUSTE sem pedido_id)
+    CREATE TEMP TABLE tmp_ajustes ON COMMIT DROP AS
+    SELECT * FROM estoque_movimentacoes
+    WHERE produto_id = p_produto_id
+      AND tipo = 'AJUSTE'
+      AND pedido_id IS NULL;
+    
+    GET DIAGNOSTICS v_ajustes_count = ROW_COUNT;
+    RAISE NOTICE '✓ % ajustes manuais preservados', v_ajustes_count;
+    
+    -- PASSO 2: Remover movimentações antigas deste produto (NÃO afeta estoque atual)
+    DELETE FROM estoque_movimentacoes WHERE produto_id = p_produto_id;
+    RAISE NOTICE '✓ Histórico antigo removido';
+    
+    -- PASSO 3: Reconstruir movimentações a partir de pedidos finalizados (cronológico)
+    FOR v_pedido IN
+        SELECT p.id, p.tipo_pedido, p.data_finalizacao, p.created_at, p.solicitante_id,
+               COALESCE(c.nome, f.nome) as entidade_nome
+        FROM pedidos p
+        LEFT JOIN clientes c ON c.id = p.cliente_id
+        LEFT JOIN fornecedores f ON f.id = p.fornecedor_id
+        INNER JOIN pedido_itens pi ON pi.pedido_id = p.id
+        WHERE p.status = 'FINALIZADO'
+          AND pi.produto_id = p_produto_id
+        ORDER BY p.data_finalizacao NULLS LAST, p.created_at ASC
+    LOOP
+        v_total_processados := v_total_processados + 1;
+        
+        -- Agrupar itens por sabor para este pedido
+        FOR v_sabor_id, v_quantidade IN
+            SELECT pi.sabor_id, SUM(pi.quantidade)
+            FROM pedido_itens pi
+            WHERE pi.pedido_id = v_pedido.id
+              AND pi.produto_id = p_produto_id
+              AND pi.sabor_id IS NOT NULL
+            GROUP BY pi.sabor_id
+        LOOP
+            INSERT INTO estoque_movimentacoes (
+                produto_id, sabor_id, tipo, quantidade,
+                estoque_anterior, estoque_novo,
+                usuario_id, pedido_id, observacao,
+                created_at
+            ) VALUES (
+                p_produto_id,
+                v_sabor_id,
+                CASE WHEN v_pedido.tipo_pedido = 'COMPRA' THEN 'ENTRADA' ELSE 'SAIDA' END,
+                v_quantidade,
+                NULL, NULL,
+                v_pedido.solicitante_id,
+                v_pedido.id,
+                CASE WHEN v_pedido.tipo_pedido = 'COMPRA'
+                     THEN format('Entrada - Pedido %s', COALESCE(v_pedido.entidade_nome, 'N/A'))
+                     ELSE format('Saída - Pedido %s', COALESCE(v_pedido.entidade_nome, 'N/A'))
+                END,
+                COALESCE(v_pedido.data_finalizacao, v_pedido.created_at)
+            );
+            v_total_movs := v_total_movs + 1;
+        END LOOP;
+    END LOOP;
+    
+    -- PASSO 4: Restaurar ajustes manuais (sem pedido)
+    INSERT INTO estoque_movimentacoes (
+        produto_id, sabor_id, tipo, quantidade,
+        estoque_anterior, estoque_novo,
+        usuario_id, pedido_id, observacao,
+        created_at
+    )
+    SELECT 
+        produto_id, sabor_id, tipo, quantidade,
+        NULL, NULL,
+        usuario_id, pedido_id, observacao,
+        created_at
+    FROM tmp_ajustes;
+    
+    DROP TABLE IF EXISTS tmp_ajustes;
+    
+    -- PASSO 5: Calcular estoque_anterior / estoque_novo (running balance)
+    FOR v_sabor_id IN
+        SELECT DISTINCT sabor_id FROM estoque_movimentacoes
+        WHERE produto_id = p_produto_id AND sabor_id IS NOT NULL
+        UNION
+        SELECT id FROM produto_sabores WHERE produto_id = p_produto_id AND ativo = true
+    LOOP
+        SELECT COALESCE(quantidade, 0) INTO v_estoque_inicio
+        FROM produto_sabores WHERE id = v_sabor_id;
+        
+        SELECT COALESCE(SUM(
+            CASE tipo 
+                WHEN 'ENTRADA' THEN quantidade
+                WHEN 'SAIDA' THEN -quantidade
+                WHEN 'AJUSTE' THEN quantidade
+                ELSE 0
+            END
+        ), 0) INTO v_delta
+        FROM estoque_movimentacoes
+        WHERE produto_id = p_produto_id AND sabor_id = v_sabor_id;
+        
+        v_saldo := v_estoque_inicio - v_delta;
+        
+        FOR v_mov IN
+            SELECT id, tipo, quantidade
+            FROM estoque_movimentacoes
+            WHERE produto_id = p_produto_id AND sabor_id = v_sabor_id
+            ORDER BY created_at ASC, id ASC
+        LOOP
+            UPDATE estoque_movimentacoes
+            SET estoque_anterior = v_saldo,
+                estoque_novo = v_saldo + CASE v_mov.tipo
+                    WHEN 'ENTRADA' THEN v_mov.quantidade
+                    WHEN 'SAIDA' THEN -v_mov.quantidade
+                    ELSE v_mov.quantidade
+                END
+            WHERE id = v_mov.id;
+            
+            v_saldo := v_saldo + CASE v_mov.tipo
+                WHEN 'ENTRADA' THEN v_mov.quantidade
+                WHEN 'SAIDA' THEN -v_mov.quantidade
+                ELSE v_mov.quantidade
+            END;
+        END LOOP;
+    END LOOP;
+    
+    RAISE NOTICE '✓ Running balance calculado';
+    RAISE NOTICE '';
+    RAISE NOTICE '════════════════════════════════════════';
+    RAISE NOTICE '✅ HISTÓRICO RECONSTRUÍDO!';
+    RAISE NOTICE '   Pedidos: % | Movimentações: % | Ajustes: %',
+        v_total_processados, v_total_movs, v_ajustes_count;
+    RAISE NOTICE '════════════════════════════════════════';
+    
+    RETURN QUERY SELECT 
+        v_total_processados,
+        v_total_movs,
+        'Histórico reconstruído com sucesso!'::TEXT;
+END;
+$function$
+;
+
+-- Permissions
+
+GRANT ALL ON FUNCTION public.reconstruir_historico_produto(uuid) TO postgres;
+GRANT ALL ON FUNCTION public.reconstruir_historico_produto(uuid) TO anon;
+GRANT ALL ON FUNCTION public.reconstruir_historico_produto(uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.reconstruir_historico_produto(uuid) TO service_role;
+
 -- DROP FUNCTION public.update_empresa_updated_at();
 
 CREATE OR REPLACE FUNCTION public.update_empresa_updated_at()

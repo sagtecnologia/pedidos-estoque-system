@@ -429,7 +429,7 @@
                 todosSabores = sabores || [];
                 
                 // Carregar movimentações
-                todasMovimentacoes = await listMovimentacoes({ limit: 500 });
+                todasMovimentacoes = await listMovimentacoes();
                 
                 renderizarTabAtiva();
                 calcularTotaisEstoque();

@@ -1,16 +1,5 @@
--- =====================================================
--- FUNCAO: adicionar_item_venda_codigo_barras
--- Proposito: adicionar item em venda lendo codigo de barras cadastrado no sabor
--- =====================================================
-
-ALTER TABLE public.produto_sabores
-ADD COLUMN IF NOT EXISTS codigo_barras varchar(50);
-
-CREATE UNIQUE INDEX IF NOT EXISTS produto_sabores_codigo_barras_key
-ON public.produto_sabores (codigo_barras)
-WHERE codigo_barras IS NOT NULL AND codigo_barras <> '';
-
-DROP FUNCTION IF EXISTS public.adicionar_item_venda_codigo_barras(uuid, character varying, numeric);
+-- Libera o perfil COMERCIAL para editar qualquer pedido de VENDA em RASCUNHO.
+-- Execute este arquivo inteiro no SQL Editor/Supabase, nao apenas um trecho com IF.
 
 CREATE OR REPLACE FUNCTION public.adicionar_item_venda_codigo_barras(
     p_pedido_id uuid,
@@ -183,12 +172,6 @@ $function$;
 
 GRANT EXECUTE ON FUNCTION public.adicionar_item_venda_codigo_barras(uuid, character varying, numeric) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.adicionar_item_venda_codigo_barras(uuid, character varying, numeric) TO service_role;
-
--- =====================================================
--- POLICIES: permitir que o fluxo normal e o fluxo por codigo adicionem itens
--- em vendas em rascunho do proprio vendedor, ou qualquer rascunho
--- para ADMIN e COMERCIAL.
--- =====================================================
 
 CREATE OR REPLACE FUNCTION public.current_app_user_role()
 RETURNS text

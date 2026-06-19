@@ -1154,9 +1154,7 @@
             
             // Controle de visibilidade do botão editar observações
             const btnEditarObs = document.getElementById('btn-editar-obs-venda');
-            if (venda.status === 'RASCUNHO' && venda.solicitante_id === currentUser.id) {
-                btnEditarObs.classList.remove('hidden');
-            } else if (currentUser.role === 'ADMIN') {
+            if (canEditCurrentVenda() || currentUser.role === 'ADMIN') {
                 btnEditarObs.classList.remove('hidden');
             } else {
                 btnEditarObs.classList.add('hidden');
@@ -1669,8 +1667,9 @@
 
         function canEditCurrentVenda() {
             const isAdmin = currentUser?.role === 'ADMIN';
+            const isComercial = currentUser?.role === 'COMERCIAL';
             const isSolicitanteDaVenda = venda?.solicitante_id === currentUser?.id;
-            return venda?.status === 'RASCUNHO' && (isSolicitanteDaVenda || isAdmin);
+            return venda?.status === 'RASCUNHO' && (isSolicitanteDaVenda || isAdmin || isComercial);
         }
 
         async function finalizarVenda() {

@@ -602,7 +602,7 @@
                 todosSabores = sabores || [];
                 
                 // Carregar movimentações
-                todasMovimentacoes = await listMovimentacoes({ limit: 500 });
+                todasMovimentacoes = await listMovimentacoes();
                 
                 renderizarTabAtiva();
                 calcularTotaisEstoque();
@@ -787,7 +787,7 @@
             }).join('');
         }
 
-        async function renderMovimentacoesProduto() {
+        function renderMovimentacoesProduto() {
             let movimentacoes = [...todasMovimentacoes];
             
             // Aplicar filtros
@@ -806,46 +806,124 @@
                 return;
             }
             
-            tbody.innerHTML = movimentacoes.map(m => {
-                const tipoBadge = m.tipo === 'ENTRADA'
-                    ? '<span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">Entrada</span>'
-                    : '<span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">Saída</span>';
+            // Agrupar por produto + pedido (soma quantidades)
+            const gruposProdutoPedido = {};
+            movimentacoes.forEach(m => {
+                const pedidoKey = m.pedido_id || 'sem-pedido';
+                const grupoKey = `${m.produto_id}|${pedidoKey}`;
                 
-                // Determinar pedido e fornecedor/cliente
-                let pedidoInfo = '-';
-                if (m.pedido) {
-                    const numero = m.pedido.numero || '-';
-                    const entidade = m.pedido.tipo_pedido === 'VENDA' 
-                        ? (m.pedido.cliente?.nome || 'Cliente não informado')
-                        : (m.pedido.fornecedor?.nome || 'Fornecedor não informado');
-                    pedidoInfo = `<div class="text-sm">
-                        <div class="font-medium text-blue-600">${numero}</div>
-                        <div class="text-gray-500 text-xs">${entidade}</div>
-                    </div>`;
+                if (!gruposProdutoPedido[grupoKey]) {
+                    gruposProdutoPedido[grupoKey] = {
+                        produto_id: m.produto_id,
+                        produto: m.produto,
+                        pedido_id: m.pedido_id,
+                        pedido: m.pedido,
+                        tipo: m.tipo,
+                        quantidade: 0,
+                        preco_compra_entrada: m.preco_compra_entrada || 0,
+                        usuario: m.usuario,
+                        created_at: m.created_at,
+                        estoque_anterior: m.estoque_anterior,
+                        estoque_novo: m.estoque_novo
+                    };
+                } else {
+                    const g = gruposProdutoPedido[grupoKey];
+                    g.quantidade += m.quantidade;
+                    if (new Date(m.created_at) > new Date(g.created_at)) {
+                        g.created_at = m.created_at;
+                    }
+                    if (g.estoque_novo === null || g.estoque_novo === undefined) {
+                        g.estoque_novo = m.estoque_novo;
+                    }
+                    if (g.estoque_anterior === null || g.estoque_anterior === undefined) {
+                        g.estoque_anterior = m.estoque_anterior;
+                    }
                 }
+            });
+            
+            // Reagrupar por produto
+            const produtosMap = {};
+            Object.values(gruposProdutoPedido).forEach(g => {
+                if (!produtosMap[g.produto_id]) {
+                    produtosMap[g.produto_id] = {
+                        produto: g.produto,
+                        grupos: []
+                    };
+                }
+                produtosMap[g.produto_id].grupos.push(g);
+            });
+            
+            const produtosOrdenados = Object.values(produtosMap).sort((a, b) => {
+                const nomeA = (a.produto?.nome || '').toLowerCase();
+                const nomeB = (b.produto?.nome || '').toLowerCase();
+                return nomeA.localeCompare(nomeB);
+            });
+            
+            let html = '';
+            produtosOrdenados.forEach(produto => {
+                const produtoNome = produto.produto?.nome || 'Produto não encontrado';
+                const produtoUnidade = todosProdutos.find(p => p.id === produto.produto?.id)?.unidade || '';
+                const produtoMarca = todosProdutos.find(p => p.id === produto.produto?.id)?.marca || '-';
                 
-                // ✅ MOSTRAR VALOR DE COMPRA DA ENTRADA
-                const valorCompra = m.tipo === 'ENTRADA' && m.preco_compra_entrada && m.preco_compra_entrada > 0
-                    ? formatCurrency(m.preco_compra_entrada)
-                    : (m.tipo === 'ENTRADA' ? '-' : 'N/A');
-                
-                return `
-                    <tr class="hover:bg-gray-50">
-                        <td class="px-6 py-4 text-sm text-gray-600">${formatDateTime(m.created_at)}</td>
-                        <td class="px-6 py-4 text-sm">${tipoBadge}</td>
-                        <td class="px-6 py-4 text-sm text-gray-900">${m.produto?.nome || '-'}</td>
-                        <td class="px-6 py-4 text-sm font-medium">${m.quantidade}</td>
-                        <td class="px-6 py-4 text-sm text-gray-600">${m.estoque_anterior}</td>
-                        <td class="px-6 py-4 text-sm text-gray-600">${m.estoque_novo}</td>
-                        <td class="px-6 py-4 text-sm font-medium text-blue-600">${valorCompra}</td>
-                        <td class="px-6 py-4">${pedidoInfo}</td>
-                        <td class="px-6 py-4 text-sm text-gray-600">${m.usuario?.full_name || '-'}</td>
-                        <td class="px-6 py-4 text-sm text-gray-500">${m.observacao || '-'}</td>
+                html += `
+                    <tr class="bg-blue-50">
+                        <td colspan="10" class="px-6 py-2 text-sm font-bold text-blue-900">
+                            <i class="fas fa-box mr-2"></i>${produtoMarca} — ${produtoNome}
+                        </td>
                     </tr>
                 `;
-            }).join('');
+                
+                produto.grupos
+                    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+                    .forEach(g => {
+                        const tipoBadge = g.tipo === 'ENTRADA'
+                            ? '<span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">Entrada</span>'
+                            : (g.tipo === 'SAIDA'
+                                ? '<span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">Saída</span>'
+                                : '<span class="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800">Estorno</span>');
+                        
+                        const tipoDescricao = g.tipo === 'ENTRADA' 
+                            ? 'Entrada' 
+                            : (g.tipo === 'SAIDA' 
+                                ? 'Saída' 
+                                : 'Estorno de Saída');
+                        
+                        let pedidoInfo = '-';
+                        if (g.pedido) {
+                            const numero = g.pedido.numero || '-';
+                            const entidade = g.pedido.tipo_pedido === 'VENDA' 
+                                ? (g.pedido.cliente?.nome || 'Cliente não informado')
+                                : (g.pedido.fornecedor?.nome || 'Fornecedor não informado');
+                            pedidoInfo = `<div class="text-sm">
+                                <div class="font-medium text-blue-600">${numero}</div>
+                                <div class="text-gray-500 text-xs">${entidade}</div>
+                            </div>`;
+                        }
+                        
+                        const valorCompra = g.tipo === 'ENTRADA' && g.preco_compra_entrada && g.preco_compra_entrada > 0
+                            ? formatCurrency(g.preco_compra_entrada)
+                            : (g.tipo === 'ENTRADA' ? '-' : 'N/A');
+                        
+                        html += `
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-6 py-4 text-sm text-gray-600">${formatDateTime(g.created_at)}</td>
+                                <td class="px-6 py-4 text-sm">${tipoBadge}</td>
+                                <td class="px-6 py-4 text-sm text-gray-900">${produtoNome}</td>
+                                <td class="px-6 py-4 text-sm font-medium">${g.quantidade} ${produtoUnidade}</td>
+                                <td class="px-6 py-4 text-sm text-gray-600">${g.estoque_anterior || '-'}</td>
+                                <td class="px-6 py-4 text-sm text-gray-600">${g.estoque_novo || '-'}</td>
+                                <td class="px-6 py-4 text-sm font-medium text-blue-600">${valorCompra}</td>
+                                <td class="px-6 py-4">${pedidoInfo}</td>
+                                <td class="px-6 py-4 text-sm text-gray-600">${g.usuario?.full_name || '-'}</td>
+                                <td class="px-6 py-4 text-sm text-gray-500">${tipoDescricao}</td>
+                            </tr>
+                        `;
+                    });
+            });
+            
+            tbody.innerHTML = html;
         }
-
+        
         async function renderMovimentacoesSabor() {
             let movimentacoes = todasMovimentacoes.filter(m => m.sabor_id !== null);
             
