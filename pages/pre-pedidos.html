@@ -178,6 +178,7 @@
         let currentUser = null;
         let prePedidos = [];
         let prePedidoEmAnaliseId = null;
+        let prePedidoAtualEmAnalise = null;
         let opcoesItensPrePedido = [];
         let opcoesClientesPrePedido = [];
         const prePedidosGerandoVenda = new Set();
@@ -211,6 +212,125 @@
             // Atualizar a cada 30 segundos
             setInterval(carregarPrePedidos, 30000);
         })();
+
+        function normalizarTipoPrecoPrePedido(tipoPreco) {
+            return ['venda', 'varejo', 'atacado'].includes(tipoPreco)
+                ? tipoPreco
+                : 'venda';
+        }
+
+        function getCampoTipoPrecoPrePedido(tipoPreco) {
+            const tipoNormalizado = normalizarTipoPrecoPrePedido(tipoPreco);
+            if (tipoNormalizado === 'varejo') return 'preco_varejo';
+            if (tipoNormalizado === 'atacado') return 'preco_atacado';
+            return 'preco_venda';
+        }
+
+        function getTextoTipoPrecoPrePedido(tipoPreco) {
+            const tipoNormalizado = normalizarTipoPrecoPrePedido(tipoPreco);
+            if (tipoNormalizado === 'varejo') return 'Tabela: Varejo';
+            if (tipoNormalizado === 'atacado') return 'Tabela: Atacado';
+            return 'Tabela: Venda';
+        }
+
+        function buildTipoPrecoOptionsHtml(selectedTipo = 'venda') {
+            const tipoNormalizado = normalizarTipoPrecoPrePedido(selectedTipo);
+            return `
+                <option value="venda" ${tipoNormalizado === 'venda' ? 'selected' : ''}>Venda</option>
+                <option value="varejo" ${tipoNormalizado === 'varejo' ? 'selected' : ''}>Varejo</option>
+                <option value="atacado" ${tipoNormalizado === 'atacado' ? 'selected' : ''}>Atacado</option>
+            `;
+        }
+
+        function getPrecoOpcaoProdutoPrePedido(opcao, tipoPreco = 'venda') {
+            const produto = opcao?.produto || {};
+            const tipoNormalizado = normalizarTipoPrecoPrePedido(tipoPreco);
+
+            if (tipoNormalizado === 'venda') {
+                return parseFloat(produto.preco_venda ?? produto.preco ?? 0) || 0;
+            }
+
+            const precoSelecionado = parseFloat(produto[getCampoTipoPrecoPrePedido(tipoNormalizado)]);
+            return Number.isFinite(precoSelecionado) && precoSelecionado > 0 ? precoSelecionado : 0;
+        }
+
+        function getItemPrePedidoAnalise(itemId) {
+            if (itemId === 'novo') {
+                return { id: 'novo', tipo_preco: 'venda' };
+            }
+
+            return prePedidoAtualEmAnalise?.pre_pedido_itens?.find(item => item.id === itemId) || null;
+        }
+
+        function getPrePedidoTipoPrecoElements(itemId) {
+            if (itemId === 'novo') {
+                return [document.getElementById('pre-item-tipo-preco-novo')].filter(Boolean);
+            }
+
+            return [
+                document.getElementById(`pre-item-tipo-preco-${itemId}`),
+                document.getElementById(`pre-item-tipo-preco-mobile-${itemId}`)
+            ].filter(Boolean);
+        }
+
+        function getPrePedidoTipoPrecoSelect(itemId) {
+            const selects = getPrePedidoTipoPrecoElements(itemId);
+            return selects.find(isElementVisible) || selects[0] || null;
+        }
+
+        function obterTipoPrecoItemAnalise(itemId, fallback = 'venda') {
+            return normalizarTipoPrecoPrePedido(getPrePedidoTipoPrecoSelect(itemId)?.value || fallback);
+        }
+
+        function syncPrePedidoTipoPrecoInputs(itemId, tipoPreco) {
+            const tipoNormalizado = normalizarTipoPrecoPrePedido(tipoPreco);
+            getPrePedidoTipoPrecoElements(itemId).forEach(select => {
+                select.value = tipoNormalizado;
+            });
+        }
+
+        function rebuildProdutoPrePedidoDropdown(itemId) {
+            const item = getItemPrePedidoAnalise(itemId) || { id: itemId };
+            const html = buildOpcoesProdutoPrePedido(item, {
+                somenteComEstoque: itemId === 'novo',
+                tipoPreco: obterTipoPrecoItemAnalise(itemId, item.tipo_preco)
+            });
+
+            [
+                document.getElementById(`pre-item-produto-dropdown-${itemId}`),
+                document.getElementById(`pre-item-produto-dropdown-mobile-${itemId}`)
+            ].filter(Boolean).forEach(dropdown => {
+                dropdown.innerHTML = html;
+            });
+        }
+
+        function atualizarPrecoPrePedidoSelecionado(itemId) {
+            const produtoValor = getPrePedidoProdutoHidden(itemId)?.value;
+            const produtoInput = getPrePedidoProdutoInput(itemId);
+            const tipoPreco = obterTipoPrecoItemAnalise(itemId, getItemPrePedidoAnalise(itemId)?.tipo_preco);
+            const selectedOption = getOpcaoProdutoPrePedidoById(produtoValor, tipoPreco)
+                || resolveProdutoPrePedidoOption(produtoInput?.value, tipoPreco);
+
+            if (!selectedOption) {
+                return;
+            }
+
+            const preco = parseFloat(selectedOption.preco || 0);
+            const valor = preco > 0 ? preco.toFixed(2) : '';
+            const desktopPreco = document.getElementById(`pre-item-preco-${itemId}`);
+            const mobilePreco = document.getElementById(`pre-item-preco-mobile-${itemId}`);
+
+            if (desktopPreco) desktopPreco.value = valor;
+            if (mobilePreco) mobilePreco.value = valor;
+        }
+
+        function handleTipoPrecoPrePedidoChange(itemId) {
+            const item = getItemPrePedidoAnalise(itemId);
+            const tipoPreco = obterTipoPrecoItemAnalise(itemId, item?.tipo_preco);
+            syncPrePedidoTipoPrecoInputs(itemId, tipoPreco);
+            rebuildProdutoPrePedidoDropdown(itemId);
+            atualizarPrecoPrePedidoSelecionado(itemId);
+        }
 
         async function carregarPrePedidos() {
             try {
@@ -417,6 +537,7 @@
                 }
 
                 const prePedido = await obterPrePedido(id);
+                prePedidoAtualEmAnalise = prePedido;
                 const validacao = await validarEstoquePrePedido(id);
                 const clientes = await getClientes();
                 opcoesItensPrePedido = await listarOpcoesItensPrePedido();
@@ -443,13 +564,20 @@
                                         <input type="hidden" id="pre-item-produto-valor-${item.id}" value="${getProdutoPrePedidoValue(item)}">
                                         <input type="text" id="pre-item-produto-${item.id}" value="${getProdutoPrePedidoLabel(item)}" onfocus="openProdutoPrePedidoDropdown('${item.id}')" onclick="openProdutoPrePedidoDropdown('${item.id}')" oninput="handleProdutoPrePedidoInput('${item.id}')" onblur="handleProdutoPrePedidoBlur('${item.id}')" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Digite para pesquisar produto ou sabor" autocomplete="off">
                                         <div id="pre-item-produto-dropdown-${item.id}" class="hidden absolute z-30 mt-1 w-full max-h-56 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg">
-                                            ${buildOpcoesProdutoPrePedido(item)}
+                                            ${buildOpcoesProdutoPrePedido(item, { tipoPreco: item.tipo_preco })}
                                         </div>
                                         <p class="text-[11px] text-gray-400 mt-1">Pesquise escrevendo o nome do produto ou sabor.</p>
+                                        <div class="mt-2">
+                                            <label class="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">Tabela</label>
+                                            <select id="pre-item-tipo-preco-${item.id}" onchange="handleTipoPrecoPrePedidoChange('${item.id}')" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                                ${buildTipoPrecoOptionsHtml(item.tipo_preco)}
+                                            </select>
+                                        </div>
                                     </div>
                                 ` : `
                                     <p class="font-medium">${item.produto.nome}</p>
                                     ${item.sabor ? `<p class="text-sm text-gray-600">${item.sabor.sabor}</p>` : ''}
+                                    <p class="text-xs font-medium text-blue-600 mt-1">${getTextoTipoPrecoPrePedido(item.tipo_preco)}</p>
                                 `}
                             </td>
                             <td class="py-3 px-4 text-center">
@@ -501,12 +629,19 @@
                                         <input type="hidden" id="pre-item-produto-valor-mobile-${item.id}" value="${getProdutoPrePedidoValue(item)}">
                                         <input type="text" id="pre-item-produto-mobile-${item.id}" value="${getProdutoPrePedidoLabel(item)}" onfocus="openProdutoPrePedidoDropdown('${item.id}')" onclick="openProdutoPrePedidoDropdown('${item.id}')" oninput="handleProdutoPrePedidoInput('${item.id}')" onblur="handleProdutoPrePedidoBlur('${item.id}')" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Digite para pesquisar produto ou sabor" autocomplete="off">
                                         <div id="pre-item-produto-dropdown-mobile-${item.id}" class="hidden absolute z-30 mt-1 w-full max-h-56 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg">
-                                            ${buildOpcoesProdutoPrePedido(item)}
+                                            ${buildOpcoesProdutoPrePedido(item, { tipoPreco: item.tipo_preco })}
+                                        </div>
+                                        <div class="mt-2">
+                                            <label class="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">Tabela</label>
+                                            <select id="pre-item-tipo-preco-mobile-${item.id}" onchange="handleTipoPrecoPrePedidoChange('${item.id}')" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                                ${buildTipoPrecoOptionsHtml(item.tipo_preco)}
+                                            </select>
                                         </div>
                                     </div>
                                 ` : `
                                     <p class="font-medium text-gray-900">${item.produto.nome}</p>
                                     ${item.sabor ? `<p class="text-sm text-gray-600">${item.sabor.sabor}</p>` : ''}
+                                    <p class="text-xs font-medium text-blue-600 mt-1">${getTextoTipoPrecoPrePedido(item.tipo_preco)}</p>
                                 `}
                             </div>
                             <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -517,7 +652,7 @@
                                         : `<div class="px-3 py-2.5 rounded-xl bg-gray-50 text-center text-sm font-medium text-gray-800">${item.quantidade}</div>`}
                                 </div>
                                 <div>
-                                    <label class="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">PreÃ§o Unit.</label>
+                                    <label class="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">Preco Unit.</label>
                                     ${podeGerar
                                         ? `<input type="number" id="pre-item-preco-mobile-${item.id}" min="0.01" step="0.01" value="${item.preco_unitario}" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-right shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">`
                                         : `<div class="px-3 py-2.5 rounded-xl bg-gray-50 text-right text-sm font-medium text-gray-800">${formatCurrency(item.preco_unitario)}</div>`}
@@ -735,19 +870,26 @@
         function fecharModalAnalise() {
             document.getElementById('modal-analise').classList.add('hidden');
             prePedidoEmAnaliseId = null;
+            prePedidoAtualEmAnalise = null;
         }
 
         function buildAdicionarItemPrePedidoHtml() {
             return `
                 <div class="mb-4 rounded-xl border border-blue-100 bg-blue-50 p-4">
-                    <div class="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(260px,1fr)_120px_140px_auto] lg:items-end">
+                    <div class="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(260px,1fr)_140px_120px_140px_auto] lg:items-end">
                         <div class="relative">
                             <label class="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">Adicionar produto / sabor</label>
                             <input type="hidden" id="pre-item-produto-valor-novo" value="">
                             <input type="text" id="pre-item-produto-novo" value="" onfocus="openProdutoPrePedidoDropdown('novo')" onclick="openProdutoPrePedidoDropdown('novo')" oninput="handleProdutoPrePedidoInput('novo')" onblur="handleProdutoPrePedidoBlur('novo')" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="Digite para pesquisar produto ou sabor" autocomplete="off">
                             <div id="pre-item-produto-dropdown-novo" class="hidden absolute z-30 mt-1 w-full max-h-56 overflow-y-auto rounded-xl border border-gray-200 bg-white shadow-lg">
-                                ${buildOpcoesProdutoPrePedido({ id: 'novo' }, { somenteComEstoque: true })}
+                                ${buildOpcoesProdutoPrePedido({ id: 'novo', tipo_preco: 'venda' }, { somenteComEstoque: true, tipoPreco: 'venda' })}
                             </div>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">Tabela</label>
+                            <select id="pre-item-tipo-preco-novo" onchange="handleTipoPrecoPrePedidoChange('novo')" class="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm bg-white shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                ${buildTipoPrecoOptionsHtml('venda')}
+                            </select>
                         </div>
                         <div>
                             <label class="block text-[11px] font-semibold uppercase tracking-wide text-gray-500 mb-1">Quantidade</label>
@@ -768,9 +910,10 @@
         async function salvarNovoItemPrePedidoAnalise() {
             const quantidade = parseFloat(getPrePedidoQuantidadeInput('novo')?.value);
             const preco = parseFloat(getPrePedidoPrecoInput('novo')?.value);
+            const tipoPreco = obterTipoPrecoItemAnalise('novo', 'venda');
             const produtoValor = getPrePedidoProdutoHidden('novo')?.value;
             const produtoInput = getPrePedidoProdutoInput('novo');
-            const selectedOption = getOpcaoProdutoPrePedidoById(produtoValor) || resolveProdutoPrePedidoOption(produtoInput?.value);
+            const selectedOption = getOpcaoProdutoPrePedidoById(produtoValor, tipoPreco) || resolveProdutoPrePedidoOption(produtoInput?.value, tipoPreco);
 
             if (!prePedidoEmAnaliseId) {
                 showToast('Abra um pre-pedido para adicionar itens.', 'warning');
@@ -805,6 +948,7 @@
                     sabor_id: selectedOption.saborId,
                     quantidade,
                     preco_unitario: preco,
+                    tipo_preco: tipoPreco,
                     estoque_disponivel_momento: estoqueSelecionado
                 });
                 await analisarPrePedido(prePedidoEmAnaliseId);
@@ -820,9 +964,10 @@
         async function salvarItemPrePedidoAnalise(itemId, estoqueAtual) {
             const quantidade = parseFloat(getPrePedidoQuantidadeInput(itemId)?.value);
             const preco = parseFloat(getPrePedidoPrecoInput(itemId)?.value);
+            const tipoPreco = obterTipoPrecoItemAnalise(itemId, getItemPrePedidoAnalise(itemId)?.tipo_preco);
             const produtoValor = getPrePedidoProdutoHidden(itemId)?.value;
             const produtoInput = getPrePedidoProdutoInput(itemId);
-            const selectedOption = getOpcaoProdutoPrePedidoById(produtoValor) || resolveProdutoPrePedidoOption(produtoInput?.value);
+            const selectedOption = getOpcaoProdutoPrePedidoById(produtoValor, tipoPreco) || resolveProdutoPrePedidoOption(produtoInput?.value, tipoPreco);
 
             if (quantidade <= 0 || preco <= 0) {
                 showToast('Quantidade e preço devem ser maiores que zero.', 'warning');
@@ -845,6 +990,7 @@
                     sabor_id: saborId,
                     quantidade,
                     preco_unitario: preco,
+                    tipo_preco: tipoPreco,
                     estoque_disponivel_momento: estoqueSelecionado
                 });
                 await analisarPrePedido(prePedidoEmAnaliseId);
@@ -861,16 +1007,15 @@
             const opcoes = options.somenteComEstoque
                 ? opcoesItensPrePedido.filter(opcao => parseFloat(opcao.quantidade || 0) > 0)
                 : opcoesItensPrePedido;
+            const tipoPreco = normalizarTipoPrecoPrePedido(options.tipoPreco || item?.tipo_preco);
 
             if (opcoes.length === 0) {
                 return '<div class="px-3 py-3 text-sm text-gray-500">Nenhum produto com estoque disponivel.</div>';
             }
 
             return opcoes.map(opcao => {
-                const selected = item.sabor_id
-                    ? opcao.id === item.sabor_id
-                    : opcao.produto?.id === item.produto?.id;
                 const label = getOpcaoProdutoPrePedidoLabel(opcao);
+                const precoTabela = getPrecoOpcaoProdutoPrePedido(opcao, tipoPreco);
 
                 return `
                     <button
@@ -881,7 +1026,7 @@
                         class="w-full px-3 py-2 text-left hover:bg-blue-50 border-b border-gray-100 last:border-b-0"
                     >
                         <div class="text-sm font-medium text-gray-800">${label}</div>
-                        <div class="text-xs text-gray-500">Estoque: ${parseFloat(opcao.quantidade || 0)} | Preço: ${formatCurrency(parseFloat(opcao.produto?.preco_venda || opcao.produto?.preco || 0))}</div>
+                        <div class="text-xs text-gray-500">Estoque: ${parseFloat(opcao.quantidade || 0)} | ${getTextoTipoPrecoPrePedido(tipoPreco)}: ${precoTabela > 0 ? formatCurrency(precoTabela) : 'Sem cadastro'}</div>
                     </button>
                 `;
             }).join('');
@@ -937,7 +1082,7 @@
             return `${item.produto?.nome || 'Produto'} - ${item.sabor?.sabor || 'Sem sabor'}`;
         }
 
-        function getOpcaoProdutoPrePedidoById(saborId) {
+        function getOpcaoProdutoPrePedidoById(saborId, tipoPreco = 'venda') {
             if (!saborId) {
                 return null;
             }
@@ -950,7 +1095,7 @@
             return {
                 produtoId: opcao.produto?.id || null,
                 saborId: opcao.id || null,
-                preco: parseFloat(opcao.produto?.preco_venda || opcao.produto?.preco || 0),
+                preco: getPrecoOpcaoProdutoPrePedido(opcao, tipoPreco),
                 estoque: parseFloat(opcao.quantidade || 0),
                 label: getOpcaoProdutoPrePedidoLabel(opcao)
             };
@@ -966,7 +1111,7 @@
             return selected?.label || '';
         }
 
-        function resolveProdutoPrePedidoOption(label) {
+        function resolveProdutoPrePedidoOption(label, tipoPreco = 'venda') {
             const normalizedLabel = normalizeProdutoPrePedidoText(label);
             if (!normalizedLabel) {
                 return null;
@@ -983,7 +1128,7 @@
             return {
                 produtoId: opcao.produto?.id || null,
                 saborId: opcao.id || null,
-                preco: parseFloat(opcao.produto?.preco_venda || opcao.produto?.preco || 0),
+                preco: getPrecoOpcaoProdutoPrePedido(opcao, tipoPreco),
                 estoque: parseFloat(opcao.quantidade || 0),
                 label: getOpcaoProdutoPrePedidoLabel(opcao)
             };
@@ -1096,8 +1241,8 @@
         function selecionarProdutoPrePedido(itemId, saborId) {
             const input = getPrePedidoProdutoInput(itemId);
             const hidden = getPrePedidoProdutoHidden(itemId);
-            const precoInput = getPrePedidoPrecoInput(itemId);
-            const selected = getOpcaoProdutoPrePedidoById(saborId);
+            const tipoPreco = obterTipoPrecoItemAnalise(itemId, getItemPrePedidoAnalise(itemId)?.tipo_preco);
+            const selected = getOpcaoProdutoPrePedidoById(saborId, tipoPreco);
 
             if (!input || !hidden || !selected) {
                 return;
@@ -1116,14 +1261,7 @@
             if (desktopHidden) desktopHidden.value = selected.saborId;
             if (mobileHidden) mobileHidden.value = selected.saborId;
 
-            const preco = parseFloat(selected.preco || 0);
-            if (preco > 0) {
-                precoInput.value = preco;
-                const desktopPreco = document.getElementById(`pre-item-preco-${itemId}`);
-                const mobilePreco = document.getElementById(`pre-item-preco-mobile-${itemId}`);
-                if (desktopPreco) desktopPreco.value = preco;
-                if (mobilePreco) mobilePreco.value = preco;
-            }
+            atualizarPrecoPrePedidoSelecionado(itemId);
 
             closeProdutoPrePedidoDropdown(itemId);
         }

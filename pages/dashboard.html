@@ -20,17 +20,27 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <!-- Header -->
             <div class="mb-8">
-                <div class="flex justify-between items-center">
+                <div class="flex flex-col gap-4 lg:flex-row lg:justify-between lg:items-center">
                     <div>
                         <h2 class="text-3xl font-bold text-gray-900">
                             <i class="fas fa-chart-line mr-3 text-blue-600"></i>Dashboard
                         </h2>
                         <p class="text-gray-600 mt-1">Visão geral do sistema</p>
                     </div>
-                    <button onclick="copiarLinkPedidoPublico()" class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition shadow-md">
-                        <i class="fas fa-link"></i>
-                        <span>Copiar Link Pedidos</span>
-                    </button>
+                    <div class="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                        <button onclick="copiarLinkPedidoPublico()" class="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition shadow-md">
+                            <i class="fas fa-link"></i>
+                            <span>Copiar Link Pedidos</span>
+                        </button>
+                        <button onclick="copiarLinkPedidoPublico('varejo')" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition shadow-md">
+                            <i class="fas fa-store"></i>
+                            <span>Copiar Link Varejo</span>
+                        </button>
+                        <button onclick="copiarLinkPedidoPublico('atacado')" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg flex items-center justify-center space-x-2 transition shadow-md">
+                            <i class="fas fa-boxes"></i>
+                            <span>Copiar Link Atacado</span>
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -331,10 +341,23 @@
             }
         }
 
-        function copiarLinkPedidoPublico() {
-            // Construir URL da página pública
+        function montarLinkPedidoPublico(tipoPreco = 'venda') {
             const origin = window.location.origin;
-            const linkPublico = `${origin}/pedido-publico.html`;
+
+            if (tipoPreco === 'varejo') {
+                return `${origin}/pedido-publico.html?tipo_preco=varejo`;
+            }
+
+            if (tipoPreco === 'atacado') {
+                return `${origin}/pedido-publico.html?tipo_preco=atacado`;
+            }
+
+            return `${origin}/pedido-publico.html`;
+        }
+
+        function copiarLinkPedidoPublico(tipoPreco = 'venda') {
+            // Construir URL da página pública
+            const linkPublico = montarLinkPedidoPublico(tipoPreco);
             
             // Copiar para clipboard
             navigator.clipboard.writeText(linkPublico).then(() => {

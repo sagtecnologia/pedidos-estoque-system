@@ -119,6 +119,14 @@
                         <label class="block text-sm font-medium text-gray-700 mb-2">Preço de Venda (R$)*</label>
                         <input type="number" step="0.01" id="produto-preco-venda" value="0" required class="w-full px-4 py-2 border border-gray-300 rounded-lg" placeholder="0.00" oninput="calcularMargem()">
                     </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Venda Varejo (R$)*</label>
+                        <input type="number" step="0.01" id="produto-preco-varejo" value="0" required class="w-full px-4 py-2 border border-gray-300 rounded-lg" placeholder="0.00">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Venda Atacado (R$)*</label>
+                        <input type="number" step="0.01" id="produto-preco-atacado" value="0" required class="w-full px-4 py-2 border border-gray-300 rounded-lg" placeholder="0.00">
+                    </div>
                     <div class="md:col-span-2" id="margem-lucro-container" style="display: none;">
                         <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
                             <div class="flex justify-between items-center">
@@ -233,9 +241,20 @@
             document.getElementById('produto-unidade').value = 'UN';
             document.getElementById('produto-estoque-minimo').value = 5;
             document.getElementById('produto-preco-venda').value = 0;
+            document.getElementById('produto-preco-varejo').value = 0;
+            document.getElementById('produto-preco-atacado').value = 0;
             configurePrecoCompraField();
             calcularMargem();
             openModal('modal-produto');
+        }
+
+        function getPrecoVendaBase(produto) {
+            return parseFloat(produto?.preco_venda ?? produto?.preco ?? 0) || 0;
+        }
+
+        function getPrecoTabelaProduto(produto, campo) {
+            const preco = parseFloat(produto?.[campo]);
+            return Number.isFinite(preco) && preco > 0 ? preco : 0;
         }
 
         // Gerenciamento de Sabores
@@ -374,7 +393,9 @@
                     </td>
                     <td class="px-6 py-4">
                         <div class="text-sm text-gray-600">Compra: ${formatMaskedCurrency(p.preco_compra || p.preco || 0, currentUser)}</div>
-                        <div class="text-sm font-medium text-gray-900">Venda: ${formatCurrency(p.preco_venda || p.preco || 0)}</div>
+                        <div class="text-sm font-medium text-gray-900">Venda: ${formatCurrency(getPrecoVendaBase(p))}</div>
+                        <div class="text-sm text-gray-600">Varejo: ${formatCurrency(getPrecoTabelaProduto(p, 'preco_varejo'))}</div>
+                        <div class="text-sm text-gray-600">Atacado: ${formatCurrency(getPrecoTabelaProduto(p, 'preco_atacado'))}</div>
                     </td>
                     <td class="px-6 py-4 text-sm space-x-2">
                         ${isRestrictedCommercialRole(currentUser)
@@ -397,6 +418,8 @@
                 ? (editingId ? editingPrecoCompraOriginal : 0)
                 : (parseFloat(document.getElementById('produto-preco-compra').value) || 0);
             const precoVenda = parseFloat(document.getElementById('produto-preco-venda').value) || 0;
+            const precoVarejo = parseFloat(document.getElementById('produto-preco-varejo').value) || 0;
+            const precoAtacado = parseFloat(document.getElementById('produto-preco-atacado').value) || 0;
             
             // Validar e formatar nome e marca
             let nome = document.getElementById('produto-nome').value.trim().toUpperCase();
@@ -411,6 +434,8 @@
                 estoque_minimo: parseFloat(document.getElementById('produto-estoque-minimo').value),
                 preco_compra: precoCompra,
                 preco_venda: precoVenda,
+                preco_varejo: precoVarejo,
+                preco_atacado: precoAtacado,
                 preco: precoVenda // Manter compatibilidade
             };
 
@@ -445,7 +470,9 @@
             document.getElementById('produto-categoria').value = produto.categoria || '';
             document.getElementById('produto-unidade').value = produto.unidade;
             document.getElementById('produto-estoque-minimo').value = produto.estoque_minimo;
-            document.getElementById('produto-preco-venda').value = produto.preco_venda || produto.preco || 0;
+            document.getElementById('produto-preco-venda').value = getPrecoVendaBase(produto);
+            document.getElementById('produto-preco-varejo').value = getPrecoTabelaProduto(produto, 'preco_varejo');
+            document.getElementById('produto-preco-atacado').value = getPrecoTabelaProduto(produto, 'preco_atacado');
             configurePrecoCompraField(produto);
             
             // Carregar sabores

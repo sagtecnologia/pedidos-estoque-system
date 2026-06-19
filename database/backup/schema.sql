@@ -218,7 +218,7 @@ GRANT ALL ON TABLE public.pagamentos TO service_role;
 
 -- DROP TABLE public.pedido_itens;
 
-CREATE TABLE public.pedido_itens ( id uuid DEFAULT uuid_generate_v4() NOT NULL, pedido_id uuid NOT NULL, produto_id uuid NOT NULL, quantidade numeric(10, 2) NOT NULL, preco_unitario numeric(10, 2) NOT NULL, subtotal numeric(10, 2) GENERATED ALWAYS AS ((quantidade * preco_unitario)) STORED NULL, created_at timestamptz DEFAULT now() NULL, sabor_id uuid NULL, conferido bool DEFAULT false NULL, conferido_por uuid NULL, data_conferencia timestamptz NULL, preco_compra_entrada numeric(10, 2) DEFAULT 0 NOT NULL, CONSTRAINT pedido_itens_pkey PRIMARY KEY (id));
+CREATE TABLE public.pedido_itens ( id uuid DEFAULT uuid_generate_v4() NOT NULL, pedido_id uuid NOT NULL, produto_id uuid NOT NULL, quantidade numeric(10, 2) NOT NULL, preco_unitario numeric(10, 2) NOT NULL, subtotal numeric(10, 2) GENERATED ALWAYS AS ((quantidade * preco_unitario)) STORED NULL, created_at timestamptz DEFAULT now() NULL, sabor_id uuid NULL, conferido bool DEFAULT false NULL, conferido_por uuid NULL, data_conferencia timestamptz NULL, preco_compra_entrada numeric(10, 2) DEFAULT 0 NOT NULL, tipo_preco varchar(20) DEFAULT 'venda'::character varying NOT NULL, CONSTRAINT pedido_itens_pkey PRIMARY KEY (id), CONSTRAINT pedido_itens_tipo_preco_check CHECK (((tipo_preco)::text = ANY ((ARRAY['venda'::character varying, 'varejo'::character varying, 'atacado'::character varying])::text[]))));
 CREATE INDEX idx_pedido_itens_conferido ON public.pedido_itens USING btree (conferido);
 CREATE INDEX idx_pedido_itens_pedido ON public.pedido_itens USING btree (pedido_id);
 CREATE INDEX idx_pedido_itens_preco_compra ON public.pedido_itens USING btree (preco_compra_entrada);
@@ -231,6 +231,7 @@ COMMENT ON COLUMN public.pedido_itens.conferido IS 'Item foi conferido na separa
 COMMENT ON COLUMN public.pedido_itens.conferido_por IS 'Usuário que conferiu o item';
 COMMENT ON COLUMN public.pedido_itens.data_conferencia IS 'Data/hora da conferência do item';
 COMMENT ON COLUMN public.pedido_itens.preco_compra_entrada IS 'Valor de compra unitário no momento do pedido/entrada. Usado para análise de lucro precisa.';
+COMMENT ON COLUMN public.pedido_itens.tipo_preco IS 'Tabela de preço usada no item: venda, varejo ou atacado.';
 
 -- Table Triggers
 
@@ -312,7 +313,7 @@ GRANT ALL ON TABLE public.pedidos TO service_role;
 
 -- DROP TABLE public.pre_pedido_itens;
 
-CREATE TABLE public.pre_pedido_itens ( id uuid DEFAULT uuid_generate_v4() NOT NULL, pre_pedido_id uuid NOT NULL, produto_id uuid NOT NULL, sabor_id uuid NULL, quantidade numeric(10, 2) NOT NULL, preco_unitario numeric(10, 2) NOT NULL, subtotal numeric(10, 2) GENERATED ALWAYS AS ((quantidade * preco_unitario)) STORED NULL, estoque_disponivel_momento numeric(10, 2) NULL, created_at timestamptz DEFAULT now() NULL, CONSTRAINT pre_pedido_itens_pkey PRIMARY KEY (id));
+CREATE TABLE public.pre_pedido_itens ( id uuid DEFAULT uuid_generate_v4() NOT NULL, pre_pedido_id uuid NOT NULL, produto_id uuid NOT NULL, sabor_id uuid NULL, quantidade numeric(10, 2) NOT NULL, preco_unitario numeric(10, 2) NOT NULL, subtotal numeric(10, 2) GENERATED ALWAYS AS ((quantidade * preco_unitario)) STORED NULL, estoque_disponivel_momento numeric(10, 2) NULL, created_at timestamptz DEFAULT now() NULL, tipo_preco varchar(20) DEFAULT 'venda'::character varying NOT NULL, CONSTRAINT pre_pedido_itens_pkey PRIMARY KEY (id), CONSTRAINT pre_pedido_itens_tipo_preco_check CHECK (((tipo_preco)::text = ANY ((ARRAY['venda'::character varying, 'varejo'::character varying, 'atacado'::character varying])::text[]))));
 CREATE INDEX idx_pre_pedido_itens_pre_pedido ON public.pre_pedido_itens USING btree (pre_pedido_id);
 CREATE INDEX idx_pre_pedido_itens_produto ON public.pre_pedido_itens USING btree (produto_id);
 CREATE INDEX idx_pre_pedido_itens_sabor ON public.pre_pedido_itens USING btree (sabor_id);

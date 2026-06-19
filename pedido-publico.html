@@ -51,6 +51,7 @@
                 <p class="text-sm text-gray-500 mt-2">
                     ⏱️ Pedidos ficam disponíveis para análise por 48 horas
                 </p>
+                <p id="tabela-preco-publica" class="text-sm font-medium text-blue-600 mt-2"></p>
             </div>
         </div>
     </header>
@@ -248,6 +249,43 @@
         let sabores = [];
         let reservasPrePedidos = {};
         let modalCarregado = false;
+        const tipoPrecoPublico = obterTipoPrecoPublico();
+
+        function obterTipoPrecoPublico() {
+            const tipo = new URLSearchParams(window.location.search).get('tipo_preco');
+            return ['varejo', 'atacado'].includes(tipo) ? tipo : 'venda';
+        }
+
+        function obterRotuloTipoPrecoPublico() {
+            if (tipoPrecoPublico === 'varejo') return 'Tabela de preco: Varejo';
+            if (tipoPrecoPublico === 'atacado') return 'Tabela de preco: Atacado';
+            return 'Tabela de preco: Venda';
+        }
+
+        function obterCampoPrecoPublico() {
+            if (tipoPrecoPublico === 'varejo') return 'preco_varejo';
+            if (tipoPrecoPublico === 'atacado') return 'preco_atacado';
+            return 'preco_venda';
+        }
+
+        function exigePrecoEspecificoPublico() {
+            return tipoPrecoPublico === 'varejo' || tipoPrecoPublico === 'atacado';
+        }
+
+        function temPrecoValidoPublico(item) {
+            const precoSelecionado = parseFloat(item?.[obterCampoPrecoPublico()]);
+            return Number.isFinite(precoSelecionado) && precoSelecionado > 0;
+        }
+
+        function obterPrecoPublico(item) {
+            if (exigePrecoEspecificoPublico()) {
+                return temPrecoValidoPublico(item)
+                    ? parseFloat(item[obterCampoPrecoPublico()]) || 0
+                    : 0;
+            }
+
+            return parseFloat(item?.preco_venda ?? item?.preco ?? 0) || 0;
+        }
 
         // ========================================
         // MAPEAMENTO DE SABORES COM ÍCONES (LOCAL)
@@ -444,23 +482,32 @@
             console.log('DOM carregado, inicializando...');
             modalCarregado = true;
             console.log('Modal existe?', document.getElementById('modal-carrinho'));
+            const tabelaPrecoElement = document.getElementById('tabela-preco-publica');
+            if (tabelaPrecoElement) {
+                tabelaPrecoElement.textContent = obterRotuloTipoPrecoPublico();
+            }
             carregarDados();
         }
 
         async function carregarDados() {
             try {
-                // Carregar marcas
-                const marcas = await listarMarcasPublicas();
-                const selectMarca = document.getElementById('filter-marca');
-                selectMarca.innerHTML = '<option value="">Todas as marcas</option>' +
-                    marcas.map(m => `<option value="${m}">${m}</option>`).join('');
-
                 // Carregar produtos, sabores e reservas de pré-pedidos
                 [produtos, sabores, reservasPrePedidos] = await Promise.all([
                     listarProdutosPublicos(),
                     listarSaboresPublicos(),
                     buscarReservasPrePedidos()
                 ]);
+
+                if (exigePrecoEspecificoPublico()) {
+                    produtos = produtos.filter(produto => temPrecoValidoPublico(produto));
+                    sabores = sabores.filter(sabor => temPrecoValidoPublico(sabor));
+                }
+
+                // Carregar marcas
+                const marcas = [...new Set(produtos.map(produto => produto.marca).filter(Boolean))].sort();
+                const selectMarca = document.getElementById('filter-marca');
+                selectMarca.innerHTML = '<option value="">Todas as marcas</option>' +
+                    marcas.map(m => `<option value="${m}">${m}</option>`).join('');
 
                 // Renderizar tudo
                 renderizarProdutos();
@@ -538,7 +585,7 @@
                             </div>
                             ${produto.descricao ? `<p class="text-sm text-gray-600 mb-3">${produto.descricao}</p>` : ''}
                             <div class="flex justify-between items-center mb-4">
-                                <span class="text-2xl font-bold text-blue-600">${formatCurrency(produto.preco_venda)}</span>
+                                <span class="text-2xl font-bold text-blue-600">${formatCurrency(obterPrecoPublico(produto))}</span>
                                 <span class="text-sm text-gray-500">Disponível: ${estoqueDisponivel}</span>
                             </div>
                             ${estoqueDisponivel === 0 && !temSabores ? `
@@ -577,7 +624,7 @@
                 <div class="flex justify-between items-center p-3 ${estoqueDisponivelSabor === 0 ? 'bg-red-50 opacity-60' : 'bg-gray-50'} rounded-lg mb-2">
                     <div class="flex-1">
                         <p class="font-medium">${saborComIcones}</p>
-                        <p class="text-sm text-gray-600">${formatCurrency(sabor.preco_venda)} | Disponível: ${estoqueDisponivelSabor}</p>
+                        <p class="text-sm text-gray-600">${formatCurrency(obterPrecoPublico(sabor))} | Disponível: ${estoqueDisponivelSabor}</p>
                     </div>
                     <div class="flex items-center space-x-2">
                         ${estoqueDisponivelSabor === 0 ? `
@@ -737,11 +784,12 @@
                 carrinho.push({
                     produto_id: produtoId,
                     sabor_id: null,
+                    tipo_preco: tipoPrecoPublico,
                     nome: produto.nome,
                     marca: produto.marca,
                     sabor: null,
                     quantidade: qtd,
-                    preco_unitario: produto.preco_venda,
+                    preco_unitario: obterPrecoPublico(produto),
                     estoque_disponivel: estoqueDisponivel
                 });
                 showToast(`${produto.nome} adicionado ao carrinho!`, 'success');
@@ -792,11 +840,12 @@
                             carrinho.push({
                                 produto_id: produtoId,
                                 sabor_id: sabor.id,
+                                tipo_preco: tipoPrecoPublico,
                                 nome: produto.nome,
                                 marca: produto.marca,
                                 sabor: sabor.sabor,
                                 quantidade: qtd,
-                                preco_unitario: sabor.preco_venda,
+                                preco_unitario: obterPrecoPublico(sabor),
                                 estoque_disponivel: estoqueDispSabor
                             });
                             adicionados++;
@@ -868,11 +917,12 @@
                 carrinho.push({
                     produto_id: produtoId,
                     sabor_id: saborId,
+                    tipo_preco: tipoPrecoPublico,
                     nome: produto.nome,
                     marca: produto.marca,
                     sabor: sabor.sabor,
                     quantidade: qtd,
-                    preco_unitario: sabor.preco_venda,
+                    preco_unitario: obterPrecoPublico(sabor),
                     estoque_disponivel: estoqueDispSabor
                 });
                 showToast(`${produto.nome} - ${sabor.sabor} adicionado!`, 'success');
@@ -1216,6 +1266,7 @@
                         nome: item.nome,
                         sabor: item.sabor,
                         quantidade: item.quantidade,
+                        tipo_preco: item.tipo_preco,
                         preco_unitario: item.preco_unitario,
                         subtotal: item.quantidade * item.preco_unitario
                     })),
