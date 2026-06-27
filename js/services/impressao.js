@@ -2,9 +2,224 @@
 // SERVIÇO: IMPRESSÃO DE PEDIDOS
 // =====================================================
 
-/**
- * Imprimir pedido de compra
- */
+const MOBILE_PRINT_USER_AGENT_REGEX = /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini|Mobile/i;
+
+function isMobilePrintDevice() {
+    return MOBILE_PRINT_USER_AGENT_REGEX.test(navigator.userAgent || '');
+}
+
+function abrirJanelaTemporariaImpressao(tituloDocumento) {
+    const printWindow = window.open('', '_blank');
+
+    if (!printWindow) {
+        throw new Error('Nao foi possivel abrir a janela de impressao. Verifique se o navegador bloqueou pop-ups.');
+    }
+
+    printWindow.document.write(`
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${tituloDocumento}</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 24px;
+            color: #1f2937;
+            background: #f9fafb;
+        }
+
+        .print-loading {
+            max-width: 480px;
+            margin: 48px auto;
+            background: #ffffff;
+            border: 1px solid #e5e7eb;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+        }
+
+        .print-loading h1 {
+            margin: 0 0 12px;
+            font-size: 20px;
+        }
+
+        .print-loading p {
+            margin: 0;
+            line-height: 1.5;
+            color: #4b5563;
+        }
+    </style>
+</head>
+<body>
+    <div class="print-loading">
+        <h1>Preparando impressao</h1>
+        <p>Estamos montando o documento para abrir a visualizacao de impressao.</p>
+    </div>
+</body>
+</html>
+    `);
+    printWindow.document.close();
+
+    return printWindow;
+}
+
+function aguardarJanelaCarregar(printWindow, timeoutMs = 10000) {
+    return new Promise((resolve) => {
+        const startedAt = Date.now();
+
+        function verificarCarregamento() {
+            try {
+                if (printWindow.closed || printWindow.document.readyState === 'complete') {
+                    resolve();
+                    return;
+                }
+            } catch (error) {
+                // Ignora leituras intermediarias enquanto a nova pagina ainda esta carregando.
+            }
+
+            if (Date.now() - startedAt >= timeoutMs) {
+                resolve();
+                return;
+            }
+
+            setTimeout(verificarCarregamento, 100);
+        }
+
+        verificarCarregamento();
+    });
+}
+
+function aguardarImagensCarregarem(printWindow, timeoutMs = 5000) {
+    return new Promise((resolve) => {
+        try {
+            const images = Array.from(printWindow.document.images || []);
+
+            if (images.length === 0) {
+                resolve();
+                return;
+            }
+
+            let pendentes = images.length;
+            let finalizado = false;
+
+            function concluir() {
+                if (finalizado) return;
+                finalizado = true;
+                resolve();
+            }
+
+            function marcarImagemComoConcluida() {
+                pendentes -= 1;
+                if (pendentes <= 0) {
+                    concluir();
+                }
+            }
+
+            images.forEach((img) => {
+                if (img.complete) {
+                    marcarImagemComoConcluida();
+                    return;
+                }
+
+                img.addEventListener('load', marcarImagemComoConcluida, { once: true });
+                img.addEventListener('error', marcarImagemComoConcluida, { once: true });
+            });
+
+            setTimeout(concluir, timeoutMs);
+        } catch (error) {
+            resolve();
+        }
+    });
+}
+
+async function carregarConteudoJanelaImpressao(printWindow, html) {
+    if (isMobilePrintDevice()) {
+        const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+        const blobUrl = URL.createObjectURL(blob);
+
+        printWindow.location.replace(blobUrl);
+
+        return {
+            targetUrl: blobUrl,
+            liberarRecursos: () => {
+                setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+            }
+        };
+    }
+
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+
+    return {
+        targetUrl: null,
+        liberarRecursos: () => {}
+    };
+}
+
+async function abrirVisualizacaoImpressao(html, tituloDocumento, toastSucesso) {
+    const printWindow = abrirJanelaTemporariaImpressao(tituloDocumento);
+    const isMobile = isMobilePrintDevice();
+
+    try {
+        const { targetUrl, liberarRecursos } = await carregarConteudoJanelaImpressao(printWindow, html);
+
+        if (targetUrl) {
+            await aguardarJanelaCarregar(printWindow, 12000);
+            await new Promise((resolve) => setTimeout(resolve, 250));
+            await aguardarJanelaCarregar(printWindow, 12000);
+        } else {
+            await aguardarJanelaCarregar(printWindow);
+        }
+
+        await aguardarImagensCarregarem(printWindow);
+
+        printWindow.focus();
+
+        if (!isMobile) {
+            printWindow.onafterprint = () => {
+                try {
+                    printWindow.close();
+                } catch (error) {
+                    // Nao faz nada se o navegador bloquear o fechamento automatico.
+                }
+            };
+        }
+
+        setTimeout(() => {
+            try {
+                printWindow.focus();
+                printWindow.print();
+            } catch (error) {
+                console.error('Erro ao abrir impressao:', error);
+            } finally {
+                liberarRecursos();
+            }
+        }, isMobile ? 900 : 350);
+
+        if (toastSucesso) {
+            showToast(toastSucesso, 'success');
+        }
+
+        if (isMobile) {
+            showToast('Se quiser baixar, use \"Salvar como PDF\" na tela de impressao.', 'info');
+        }
+
+        return printWindow;
+    } catch (error) {
+        try {
+            printWindow.close();
+        } catch (closeError) {
+            // Ignora erro ao fechar janela temporaria.
+        }
+
+        throw error;
+    }
+}
+
 async function imprimirPedidoCompra(pedidoId) {
     try {
         showLoading(true);
@@ -115,6 +330,86 @@ async function imprimirPedidoVenda(pedidoId) {
 /**
  * Gerar HTML para impressão de pedido de compra
  */
+async function imprimirPedidoCompra(pedidoId) {
+    try {
+        showLoading(true);
+
+        const { data: pedido, error: pedidoError } = await supabase
+            .from('pedidos')
+            .select(`
+                *,
+                solicitante:users!pedidos_solicitante_id_fkey(full_name),
+                aprovador:users!pedidos_aprovador_id_fkey(full_name),
+                fornecedor:fornecedores(nome, cnpj, whatsapp, endereco)
+            `)
+            .eq('id', pedidoId)
+            .single();
+
+        if (pedidoError) throw pedidoError;
+
+        const { data: itens, error: itensError } = await supabase
+            .from('pedido_itens')
+            .select('*, produto:produtos(id, codigo, nome, unidade, marca), sabor:produto_sabores(sabor)')
+            .eq('pedido_id', pedidoId)
+            .order('created_at', { ascending: true });
+
+        if (itensError) throw itensError;
+
+        const empresaConfig = await getEmpresaConfig();
+        const html = gerarHTMLPedidoCompra(pedido, itens, empresaConfig);
+
+        await abrirVisualizacaoImpressao(
+            html,
+            `Pedido de Compra ${pedido.numero}`,
+            'Visualizacao de impressao aberta!'
+        );
+    } catch (error) {
+        handleError(error, 'Erro ao imprimir pedido');
+    } finally {
+        showLoading(false);
+    }
+}
+
+async function imprimirPedidoVenda(pedidoId) {
+    try {
+        showLoading(true);
+
+        const { data: pedido, error: pedidoError } = await supabase
+            .from('pedidos')
+            .select(`
+                *,
+                solicitante:users!pedidos_solicitante_id_fkey(full_name),
+                aprovador:users!pedidos_aprovador_id_fkey(full_name),
+                cliente:clientes(nome, cpf_cnpj, tipo, contato, whatsapp, endereco, cidade, estado)
+            `)
+            .eq('id', pedidoId)
+            .single();
+
+        if (pedidoError) throw pedidoError;
+
+        const { data: itens, error: itensError } = await supabase
+            .from('pedido_itens')
+            .select('*, produto:produtos(id, codigo, nome, unidade, marca), sabor:produto_sabores(sabor)')
+            .eq('pedido_id', pedidoId)
+            .order('created_at', { ascending: true });
+
+        if (itensError) throw itensError;
+
+        const empresaConfig = await getEmpresaConfig();
+        const html = gerarHTMLPedidoVenda(pedido, itens, empresaConfig);
+
+        await abrirVisualizacaoImpressao(
+            html,
+            `Pedido de Venda ${pedido.numero}`,
+            'Visualizacao de impressao aberta!'
+        );
+    } catch (error) {
+        handleError(error, 'Erro ao imprimir pedido');
+    } finally {
+        showLoading(false);
+    }
+}
+
 function gerarHTMLPedidoCompra(pedido, itens, empresaConfig) {
     const statusLabels = {
         'RASCUNHO': 'Rascunho',
