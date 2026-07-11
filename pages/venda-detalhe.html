@@ -47,11 +47,12 @@
                                 <thead class="bg-gray-50">
                                     <tr>
                                         <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Produto</th>
-                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Qtd</th>
-                                        <th id="th-estoque" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Estoque</th>
-                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Preço Un.</th>
-                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Subtotal</th>
-                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Ações</th>
+                                        <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Qtd</th>
+                                        <th id="th-estoque" class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Estoque</th>
+                                        <th id="th-preco-compra" class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap hidden">Preço Un. Compra</th>
+                                        <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Preço Un.</th>
+                                        <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Subtotal</th>
+                                        <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase whitespace-nowrap">Ações</th>
                                     </tr>
                                 </thead>
                                 <tbody id="itens-tbody">
@@ -374,7 +375,7 @@
                         <select id="item-tipo-preco" class="w-full px-4 py-2 border border-gray-300 rounded-lg" onchange="atualizarTabelaPrecoVenda()">
                             <option value="venda">Venda</option>
                             <option value="varejo">Varejo</option>
-                            <option value="atacado">Atacado</option>
+                            <option value="atacado">Acima de 100</option>
                         </select>
                     </div>
                 </div>
@@ -536,6 +537,7 @@
                         <option value="">Selecione um produto...</option>
                     </select>
                     <p id="info-itens-produto" class="text-xs text-gray-500 mt-1 hidden"></p>
+                    <p id="info-preco-compra-lote" class="text-xs text-gray-500 mt-1 hidden"></p>
                 </div>
                 
                 <div class="mb-4">
@@ -1269,13 +1271,18 @@
             // Controlar visibilidade da coluna de estoque
             const thEstoque = document.getElementById('th-estoque');
             const mostrarEstoque = venda.status !== 'FINALIZADO';
+            const mostrarPrecoCompra = currentUser?.role === 'ADMIN';
+            const thPrecoCompra = document.getElementById('th-preco-compra');
             
             if (thEstoque) {
                 thEstoque.style.display = mostrarEstoque ? '' : 'none';
             }
+            if (thPrecoCompra) {
+                thPrecoCompra.classList.toggle('hidden', !mostrarPrecoCompra);
+            }
             
             if (itens.length === 0) {
-                const colspan = mostrarEstoque ? '6' : '5';
+                const colspan = (mostrarEstoque ? 6 : 5) + (mostrarPrecoCompra ? 1 : 0);
                 tbody.innerHTML = `<tr><td colspan="${colspan}" class="px-4 py-4 text-center text-gray-500 text-sm">Nenhum item adicionado</td></tr>`;
                 document.getElementById('venda-quantidade-total').textContent = '0 UN';
                 document.getElementById('venda-quantidades-produtos').innerHTML = '<span class="text-gray-400">Nenhum produto</span>';
@@ -1358,6 +1365,12 @@
                 
                 return { ...item, precoCompraReal: precoCompra };
             }));
+            const precoCompraPorItem = new Map(itensComPrecoCompra.map(item => [item.id, item.precoCompraReal]));
+            if (mostrarPrecoCompra) {
+                itens.forEach(item => {
+                    item.precoCompraReal = precoCompraPorItem.get(item.id) || 0;
+                });
+            }
             
             // Calcular margem de lucro com preços reais
             let custoTotal = 0;
@@ -1411,7 +1424,7 @@
                     console.error('Erro ao buscar estoque:', error);
                 }
                 
-                return { ...item, estoqueAtual };
+                return { ...item, estoqueAtual, precoCompraReal: precoCompraPorItem.get(item.id) || 0 };
             }));
             
             tbody.innerHTML = itensComEstoque.map(item => {
@@ -1450,17 +1463,18 @@
                             ${sabor ? `<div class="text-xs text-gray-500">${sabor}</div>` : ''}
                             <div class="text-xs text-gray-500">${item.produto?.codigo || ''}</div>
                         </td>
-                        <td class="px-4 py-3">${item.quantidade} ${item.produto?.unidade || ''}</td>
-                        <td class="px-4 py-3 ${estoqueClass}" style="display: ${mostrarEstoque ? '' : 'none'}">
-                            <div class="flex items-center gap-1">
+                        <td class="px-3 py-3 text-right whitespace-nowrap">${item.quantidade} ${item.produto?.unidade || ''}</td>
+                        <td class="px-3 py-3 text-right ${estoqueClass}" style="display: ${mostrarEstoque ? '' : 'none'}">
+                            <div class="flex items-center justify-end gap-1">
                                 <span>${estoqueIcon}</span>
                                 <span>${estoqueAtual}</span>
                             </div>
                             <div class="text-xs">${estoqueMensagem}</div>
                         </td>
-                        <td class="px-4 py-3">${formatCurrency(item.preco_unitario)}</td>
-                        <td class="px-4 py-3 font-medium">${formatCurrency(item.subtotal)}</td>
-                        <td class="px-4 py-3">
+                        <td class="px-3 py-3 text-right whitespace-nowrap" style="display: ${mostrarPrecoCompra ? '' : 'none'}">${formatCurrency(item.precoCompraReal)}</td>
+                        <td class="px-3 py-3 text-right whitespace-nowrap">${formatCurrency(item.preco_unitario)}</td>
+                        <td class="px-3 py-3 text-right font-medium whitespace-nowrap">${formatCurrency(item.subtotal)}</td>
+                        <td class="px-3 py-3 text-center whitespace-nowrap">
                             ${podeEditarItens ? `
                                 <button onclick="editarItem('${item.id}', ${item.quantidade}, ${item.preco_unitario})" class="text-blue-600 hover:text-blue-800 text-sm mr-2" title="Editar">
                                     <i class="fas fa-edit"></i>
@@ -2171,6 +2185,7 @@
             document.getElementById('novo-preco-lote').value = '';
             document.getElementById('preview-alteracao-lote').classList.add('hidden');
             document.getElementById('info-itens-produto').classList.add('hidden');
+            document.getElementById('info-preco-compra-lote').classList.add('hidden');
 
             openModal('modal-alterar-preco-lote');
         }
@@ -2179,9 +2194,11 @@
             const select = document.getElementById('select-produto-lote');
             const selectedOption = select.options[select.selectedIndex];
             const infoElement = document.getElementById('info-itens-produto');
+            const infoPrecoCompra = document.getElementById('info-preco-compra-lote');
             
             if (!selectedOption.value) {
                 infoElement.classList.add('hidden');
+                infoPrecoCompra.classList.add('hidden');
                 document.getElementById('preview-alteracao-lote').classList.add('hidden');
                 return;
             }
@@ -2191,6 +2208,17 @@
             
             infoElement.textContent = `Este produto possui ${itensData.length} sabor(es) na venda, totalizando ${quantidadeTotal} unidades.`;
             infoElement.classList.remove('hidden');
+
+            if (currentUser?.role === 'ADMIN') {
+                const precosCompra = [...new Set(itensData.map(item => parseFloat(item.precoCompraReal || item.produto?.preco_compra || 0)))];
+                const textoPrecoCompra = precosCompra.length === 1
+                    ? formatCurrency(precosCompra[0])
+                    : precosCompra.map(formatCurrency).join(' / ');
+                infoPrecoCompra.textContent = `Preço unitário de compra: ${textoPrecoCompra}`;
+                infoPrecoCompra.classList.remove('hidden');
+            } else {
+                infoPrecoCompra.classList.add('hidden');
+            }
             
             // Se já tiver preço digitado, recalcular
             calcularNovoTotalLote();

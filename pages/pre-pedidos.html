@@ -229,7 +229,7 @@
         function getTextoTipoPrecoPrePedido(tipoPreco) {
             const tipoNormalizado = normalizarTipoPrecoPrePedido(tipoPreco);
             if (tipoNormalizado === 'varejo') return 'Tabela: Varejo';
-            if (tipoNormalizado === 'atacado') return 'Tabela: Atacado';
+            if (tipoNormalizado === 'atacado') return 'Tabela: Acima de 100';
             return 'Tabela: Venda';
         }
 
@@ -238,7 +238,7 @@
             return `
                 <option value="venda" ${tipoNormalizado === 'venda' ? 'selected' : ''}>Venda</option>
                 <option value="varejo" ${tipoNormalizado === 'varejo' ? 'selected' : ''}>Varejo</option>
-                <option value="atacado" ${tipoNormalizado === 'atacado' ? 'selected' : ''}>Atacado</option>
+                <option value="atacado" ${tipoNormalizado === 'atacado' ? 'selected' : ''}>Acima de 100</option>
             `;
         }
 
