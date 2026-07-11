@@ -184,6 +184,8 @@
         let saboresCount = 0;
         let currentUser = null;
         let editingPrecoCompraOriginal = 0;
+        let produtosListados = [];
+        const marcasExpandidas = new Set();
 
         (async () => {
             await checkAuth();
@@ -372,6 +374,7 @@
             const search = document.getElementById('search').value;
             const categoria = document.getElementById('filter-categoria').value;
             const produtos = await listProdutos({ search, categoria });
+            produtosListados = produtos;
             
             const tbody = document.getElementById('produtos-tbody');
             if (produtos.length === 0) {
@@ -379,12 +382,46 @@
                 return;
             }
 
-            tbody.innerHTML = produtos.map(p => `
+            renderProdutosAgrupados();
+        }
+
+        function renderProdutosAgrupados() {
+            const tbody = document.getElementById('produtos-tbody');
+            const buscaAtiva = document.getElementById('search').value.trim().length > 0;
+            const grupos = produtosListados.reduce((acc, produto) => {
+                const marca = produto.marca?.trim() || 'SEM MARCA';
+                if (!acc[marca]) acc[marca] = [];
+                acc[marca].push(produto);
+                return acc;
+            }, {});
+
+            tbody.innerHTML = Object.keys(grupos)
+                .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+                .map(marca => {
+                    const produtosDaMarca = grupos[marca].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+                    const expandida = buscaAtiva || marcasExpandidas.has(marca);
+                    const indiceMarca = Object.keys(grupos).sort((a, b) => a.localeCompare(b, 'pt-BR')).indexOf(marca);
+
+                    const cabecalhoMarca = `
+                        <tr class="bg-gray-50 hover:bg-gray-100 cursor-pointer" onclick="toggleMarcaProdutos(${indiceMarca})">
+                            <td colspan="6" class="px-6 py-3">
+                                <div class="flex items-center justify-between">
+                                    <span class="font-semibold text-gray-800">
+                                        <i class="fas fa-chevron-${expandida ? 'down' : 'right'} mr-2 text-gray-500"></i>
+                                        ${marca}
+                                    </span>
+                                    <span class="text-xs text-gray-500">${produtosDaMarca.length} produto(s)</span>
+                                </div>
+                            </td>
+                        </tr>`;
+
+                    if (!expandida) return cabecalhoMarca;
+
+                    const linhasProdutos = produtosDaMarca.map(p => `
                 <tr class="hover:bg-gray-50">
                     <td class="px-6 py-4 text-sm text-gray-900">${p.codigo}</td>
                     <td class="px-6 py-4">
                         <div class="text-sm font-medium text-gray-900">${p.nome}</div>
-                        ${p.marca ? `<div class="text-xs text-gray-500">Marca: ${p.marca}</div>` : ''}
                     </td>
                     <td class="px-6 py-4 text-sm text-gray-600">${p.categoria || '-'}</td>
                     <td class="px-6 py-4 text-sm ${p.estoque_atual <= p.estoque_minimo ? 'text-red-600 font-semibold' : 'text-gray-900'}">
@@ -408,7 +445,26 @@
                             `}
                     </td>
                 </tr>
-            `).join('');
+                    `).join('');
+
+                    return cabecalhoMarca + linhasProdutos;
+                }).join('');
+        }
+
+        window.toggleMarcaProdutos = function(indiceMarca) {
+            const marcasOrdenadas = Object.keys(produtosListados.reduce((acc, produto) => {
+                acc[produto.marca?.trim() || 'SEM MARCA'] = true;
+                return acc;
+            }, {})).sort((a, b) => a.localeCompare(b, 'pt-BR'));
+            const marca = marcasOrdenadas[indiceMarca];
+            if (!marca) return;
+
+            if (marcasExpandidas.has(marca)) {
+                marcasExpandidas.delete(marca);
+            } else {
+                marcasExpandidas.add(marca);
+            }
+            renderProdutosAgrupados();
         }
 
         document.getElementById('form-produto').addEventListener('submit', async (e) => {

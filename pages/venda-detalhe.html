@@ -1301,18 +1301,23 @@
                     acc[produtoId] = {
                         nome: item.produto?.nome || 'N/A',
                         unidade: item.produto?.unidade || 'UN',
-                        quantidade: 0
+                        quantidade: 0,
+                        precoUnitario: parseFloat(item.preco_unitario || 0),
+                        subtotal: 0
                     };
                 }
 
                 acc[produtoId].quantidade += quantidade;
+                acc[produtoId].subtotal += parseFloat(item.subtotal || 0);
                 return acc;
             }, {});
 
             document.getElementById('venda-quantidades-produtos').innerHTML = Object.values(quantidadesPorProduto).map(produto => `
-                <div class="flex justify-between gap-3">
-                    <span class="truncate">${produto.nome}</span>
-                    <span class="font-medium whitespace-nowrap">${Math.round(produto.quantidade)} ${produto.unidade}</span>
+                <div class="space-y-1">
+                    <span class="block truncate font-semibold text-blue-700">${produto.nome}</span>
+                    <span class="block text-right font-medium whitespace-nowrap">
+                        ${Math.round(produto.quantidade)} ${produto.unidade} × ${formatCurrency(produto.precoUnitario)} = ${formatCurrency(produto.subtotal)}
+                    </span>
                 </div>
             `).join('');
             
