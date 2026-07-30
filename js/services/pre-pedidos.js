@@ -704,6 +704,20 @@ async function gerarPedidoVenda(prePedidoId, clienteId, observacoesEstoque = '')
         }
 
         // 2. Validar estoque (não bloqueia mais, apenas informa)
+        // Congelar o custo agora, junto com o item que será criado na venda.
+        // Alterações futuras no cadastro não podem mudar o lucro desta venda.
+        const produtoIds = [...new Set(prePedido.pre_pedido_itens.map(item => item.produto_id))];
+        const { data: produtosVenda, error: errorProdutosVenda } = await supabase
+            .from('produtos')
+            .select('id, preco_compra')
+            .in('id', produtoIds);
+
+        if (errorProdutosVenda) throw errorProdutosVenda;
+
+        const custoPorProduto = new Map(
+            (produtosVenda || []).map(produto => [produto.id, Number(produto.preco_compra) || 0])
+        );
+
         const validacao = await validarEstoquePrePedido(prePedidoId);
         // Removido o throw de erro - permite gerar mesmo com estoque insuficiente
 
@@ -790,6 +804,7 @@ async function gerarPedidoVenda(prePedidoId, clienteId, observacoesEstoque = '')
             sabor_id: item.sabor_id || null,
             quantidade: item.quantidade,
             preco_unitario: item.preco_unitario,
+            preco_compra_entrada: custoPorProduto.get(item.produto_id) || 0,
             tipo_preco: normalizarTipoPrecoItem(item.tipo_preco)
         }));
 

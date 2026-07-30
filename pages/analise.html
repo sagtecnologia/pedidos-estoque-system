@@ -550,6 +550,13 @@
             return `${ano}-${mes}-${dia}`;
         }
 
+        // O lucro sempre usa o custo congelado no item da venda. Nunca consulte o
+        // cadastro atual do produto: ele pode ser alterado depois da venda.
+        function obterCustoHistorico(item) {
+            const custo = Number(item.preco_compra_entrada);
+            return Number.isFinite(custo) && custo >= 0 ? custo : 0;
+        }
+
         async function limparFiltros() {
             document.getElementById('filter-marca').value = '';
             document.getElementById('filter-produto').value = '';
@@ -641,10 +648,32 @@
                 
                 if (errorVendas) throw errorVendas;
                 
-                // Buscar itens de cada venda
-                vendasFinalizadas = await Promise.all(vendas.map(async p => {
-                    const itens = await getItensPedido(p.id);
-                    return { ...p, itens };
+                // Buscar todos os itens em uma única consulta. Isso garante que o
+                // custo histórico recém-atualizado seja lido do banco para o
+                // mesmo conjunto de vendas do filtro.
+                const pedidosVendaIds = vendas.map(venda => venda.id);
+                const itensVendas = [];
+                const tamanhoLote = 50;
+
+                for (let inicio = 0; inicio < pedidosVendaIds.length; inicio += tamanhoLote) {
+                    const loteIds = pedidosVendaIds.slice(inicio, inicio + tamanhoLote);
+                    const { data, error: errorItensVendas } = await supabase
+                        .from('pedido_itens')
+                        .select('*, sabor:produto_sabores(id, sabor, quantidade)')
+                        .in('pedido_id', loteIds);
+
+                    if (errorItensVendas) throw errorItensVendas;
+                    itensVendas.push(...(data || []));
+                }
+
+                const itensPorPedido = itensVendas.reduce((mapa, item) => {
+                    (mapa[item.pedido_id] ||= []).push(item);
+                    return mapa;
+                }, {});
+
+                vendasFinalizadas = vendas.map(venda => ({
+                    ...venda,
+                    itens: itensPorPedido[venda.id] || []
                 }));
 
                 // Carregar compras finalizadas com itens
@@ -693,17 +722,7 @@
                     if (filtroAtual.sabor && item.sabor_id !== filtroAtual.sabor) return;
                     
                     receitaTotal += item.preco_unitario * item.quantidade;
-                    // Prioridade correta: preco_compra_entrada > produto.preco_compra > preco_unitario > 0
-                    let precoCompraResumo = 0;
-                    if (item.preco_compra_entrada > 0) {
-                        precoCompraResumo = item.preco_compra_entrada;
-                    } else if (produto.preco_compra > 0) {
-                        precoCompraResumo = produto.preco_compra;
-                    } else if (item.preco_unitario > 0) {
-                        precoCompraResumo = item.preco_unitario;
-                    } else {
-                        precoCompraResumo = 0;
-                    }
+                    const precoCompraResumo = obterCustoHistorico(item);
                     custoTotal += precoCompraResumo * item.quantidade;
                 });
             });
@@ -796,17 +815,7 @@
                     
                     lucrosPorMarca[marca].quantidade += item.quantidade;
                     lucrosPorMarca[marca].receita += item.preco_unitario * item.quantidade;
-                    // Prioridade correta: preco_compra_entrada > produto.preco_compra > preco_unitario > 0
-                    let precoCompra = 0;
-                    if (item.preco_compra_entrada > 0) {
-                        precoCompra = item.preco_compra_entrada;
-                    } else if (produto.preco_compra > 0) {
-                        precoCompra = produto.preco_compra;
-                    } else if (item.preco_unitario > 0) {
-                        precoCompra = item.preco_unitario;
-                    } else {
-                        precoCompra = 0;
-                    }
+                    const precoCompra = obterCustoHistorico(item);
                     lucrosPorMarca[marca].custo += precoCompra * item.quantidade;
                 });
             });
@@ -865,17 +874,7 @@
                     
                     lucrosPorProduto[key].quantidade += item.quantidade;
                     lucrosPorProduto[key].receita += item.preco_unitario * item.quantidade;
-                    // Prioridade correta: preco_compra_entrada > produto.preco_compra > preco_unitario > 0
-                    let precoCompra = 0;
-                    if (item.preco_compra_entrada > 0) {
-                        precoCompra = item.preco_compra_entrada;
-                    } else if (produto.preco_compra > 0) {
-                        precoCompra = produto.preco_compra;
-                    } else if (item.preco_unitario > 0) {
-                        precoCompra = item.preco_unitario;
-                    } else {
-                        precoCompra = 0;
-                    }
+                    const precoCompra = obterCustoHistorico(item);
                     lucrosPorProduto[key].custo += precoCompra * item.quantidade;
                 });
             });
@@ -933,17 +932,7 @@
                     
                     lucrosPorSabor[key].quantidade += item.quantidade;
                     lucrosPorSabor[key].receita += item.preco_unitario * item.quantidade;
-                    // Prioridade correta: preco_compra_entrada > produto.preco_compra > preco_unitario > 0
-                    let precoCompra = 0;
-                    if (item.preco_compra_entrada > 0) {
-                        precoCompra = item.preco_compra_entrada;
-                    } else if (produto.preco_compra > 0) {
-                        precoCompra = produto.preco_compra;
-                    } else if (item.preco_unitario > 0) {
-                        precoCompra = item.preco_unitario;
-                    } else {
-                        precoCompra = 0;
-                    }
+                    const precoCompra = obterCustoHistorico(item);
                     lucrosPorSabor[key].custo += precoCompra * item.quantidade;
                 }
             }
@@ -1003,16 +992,7 @@
                     
                     lucrosPorCliente[clienteNome].qtdProdutos += item.quantidade;
                     lucrosPorCliente[clienteNome].receita += item.preco_unitario * item.quantidade;
-                    let precoCompraCliente = 0;
-                    if (item.preco_compra_entrada > 0) {
-                        precoCompraCliente = item.preco_compra_entrada;
-                    } else if (produto.preco_compra > 0) {
-                        precoCompraCliente = produto.preco_compra;
-                    } else if (item.preco_unitario > 0) {
-                        precoCompraCliente = item.preco_unitario;
-                    } else {
-                        precoCompraCliente = 0;
-                    }
+                    const precoCompraCliente = obterCustoHistorico(item);
                     lucrosPorCliente[clienteNome].custo += precoCompraCliente * item.quantidade;
                 });
             });
@@ -1171,17 +1151,7 @@
                     if (filtroAtual.produto && produto.id !== filtroAtual.produto) return;
                     if (filtroAtual.sabor && item.sabor_id !== filtroAtual.sabor) return;
                     
-                    // Prioridade correta: preco_compra_entrada > produto.preco_compra > preco_unitario > 0
-                    let custoUnitario = 0;
-                    if (item.preco_compra_entrada > 0) {
-                        custoUnitario = item.preco_compra_entrada;
-                    } else if (produto.preco_compra > 0) {
-                        custoUnitario = produto.preco_compra;
-                    } else if (item.preco_unitario > 0) {
-                        custoUnitario = item.preco_unitario;
-                    } else {
-                        custoUnitario = 0;
-                    }
+                    const custoUnitario = obterCustoHistorico(item);
                     const lucroUnitario = item.preco_unitario - custoUnitario;
                     const lucroTotal = lucroUnitario * item.quantidade;
                     
@@ -1399,7 +1369,7 @@
                     
                     lucrosPorMarca[marca].quantidade += item.quantidade;
                     lucrosPorMarca[marca].receita += item.preco_unitario * item.quantidade;
-                    lucrosPorMarca[marca].custo += (produto.preco_compra || 0) * item.quantidade;
+                    lucrosPorMarca[marca].custo += obterCustoHistorico(item) * item.quantidade;
                 });
             });
             
@@ -1445,7 +1415,7 @@
                     
                     lucrosPorProduto[key].quantidade += item.quantidade;
                     lucrosPorProduto[key].receita += item.preco_unitario * item.quantidade;
-                    lucrosPorProduto[key].custo += (produto.preco_compra || 0) * item.quantidade;
+                    lucrosPorProduto[key].custo += obterCustoHistorico(item) * item.quantidade;
                 });
             });
             
@@ -1494,7 +1464,7 @@
                     
                     lucrosPorSabor[key].quantidade += item.quantidade;
                     lucrosPorSabor[key].receita += item.preco_unitario * item.quantidade;
-                    lucrosPorSabor[key].custo += (produto.preco_compra || 0) * item.quantidade;
+                    lucrosPorSabor[key].custo += obterCustoHistorico(item) * item.quantidade;
                 });
             });
             
@@ -1530,7 +1500,7 @@
                     if (filtroAtual.produto && produto.id !== filtroAtual.produto) return;
                     if (filtroAtual.sabor && item.sabor_id !== filtroAtual.sabor) return;
                     
-                    const custoUnitario = produto.preco_compra || 0;
+                    const custoUnitario = obterCustoHistorico(item);
                     const lucroUnitario = item.preco_unitario - custoUnitario;
                     
                     linhas.push({
@@ -2230,7 +2200,7 @@
                     }
                     
                     dadosPorMarca[marca].receita += item.preco_unitario * item.quantidade;
-                    dadosPorMarca[marca].custo += (produto.preco_compra || 0) * item.quantidade;
+                    dadosPorMarca[marca].custo += obterCustoHistorico(item) * item.quantidade;
                 });
             });
 
@@ -2303,7 +2273,7 @@
                     if (filtroAtual.sabor && item.sabor_id !== filtroAtual.sabor) return;
                     
                     receitaDia += item.preco_unitario * item.quantidade;
-                    custoDia += (produto.preco_compra || 0) * item.quantidade;
+                    custoDia += obterCustoHistorico(item) * item.quantidade;
                 });
                 
                 if (receitaDia > 0 || custoDia > 0) {

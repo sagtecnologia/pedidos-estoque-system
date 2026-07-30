@@ -414,6 +414,13 @@
             return `${ano}-${mes}-${dia}`;
         }
 
+        // O lucro sempre usa o custo congelado no item da venda. Nunca consulte o
+        // cadastro atual do produto: ele pode ser alterado depois da venda.
+        function obterCustoHistorico(item) {
+            const custo = Number(item.preco_compra_entrada);
+            return Number.isFinite(custo) && custo >= 0 ? custo : 0;
+        }
+
         async function aplicarFiltros() {
             filtroAtual.marca = document.getElementById('filter-marca').value;
             filtroAtual.produto = document.getElementById('filter-produto').value;
@@ -503,10 +510,31 @@
                 
                 if (error) throw error;
                 
-                // Buscar itens de cada pedido
-                vendasFinalizadas = await Promise.all(pedidos.map(async p => {
-                    const itens = await getItensPedido(p.id);
-                    return { ...p, itens };
+                // Buscar todos os itens em uma única consulta, sempre lendo o
+                // custo histórico atualizado do banco.
+                const pedidosVendaIds = pedidos.map(pedido => pedido.id);
+                const itensVendas = [];
+                const tamanhoLote = 50;
+
+                for (let inicio = 0; inicio < pedidosVendaIds.length; inicio += tamanhoLote) {
+                    const loteIds = pedidosVendaIds.slice(inicio, inicio + tamanhoLote);
+                    const { data, error: errorItensVendas } = await supabase
+                        .from('pedido_itens')
+                        .select('*, sabor:produto_sabores(id, sabor, quantidade)')
+                        .in('pedido_id', loteIds);
+
+                    if (errorItensVendas) throw errorItensVendas;
+                    itensVendas.push(...(data || []));
+                }
+
+                const itensPorPedido = itensVendas.reduce((mapa, item) => {
+                    (mapa[item.pedido_id] ||= []).push(item);
+                    return mapa;
+                }, {});
+
+                vendasFinalizadas = pedidos.map(pedido => ({
+                    ...pedido,
+                    itens: itensPorPedido[pedido.id] || []
                 }));
                 
                 calcularResumo();
@@ -534,9 +562,7 @@
                 venda.itens.forEach(item => {
                     const produto = todosProdutos.find(p => p.id === item.produto_id);
                     if (produto) {
-                        const precoCompra = item.preco_compra_entrada !== null && item.preco_compra_entrada !== undefined 
-                            ? item.preco_compra_entrada 
-                            : (produto.preco_compra || 0);
+                        const precoCompra = obterCustoHistorico(item);
                         custoTotal += precoCompra * item.quantidade;
                     }
                 });
@@ -627,9 +653,7 @@
                     lucrosPorMarca[marca].quantidade += item.quantidade;
                     lucrosPorMarca[marca].receita += item.preco_unitario * item.quantidade;
                     // Usar preco_compra_entrada da entrada se disponível, senão usar do cadastro do produto
-                    const precoCompra = item.preco_compra_entrada !== null && item.preco_compra_entrada !== undefined 
-                        ? item.preco_compra_entrada 
-                        : (produto.preco_compra || 0);
+                    const precoCompra = obterCustoHistorico(item);
                     lucrosPorMarca[marca].custo += precoCompra * item.quantidade;
                 });
             });
@@ -689,9 +713,7 @@
                     lucrosPorProduto[key].quantidade += item.quantidade;
                     lucrosPorProduto[key].receita += item.preco_unitario * item.quantidade;
                     // Usar preco_compra_entrada da entrada se disponível, senão usar do cadastro do produto
-                    const precoCompra = item.preco_compra_entrada !== null && item.preco_compra_entrada !== undefined 
-                        ? item.preco_compra_entrada 
-                        : (produto.preco_compra || 0);
+                    const precoCompra = obterCustoHistorico(item);
                     lucrosPorProduto[key].custo += precoCompra * item.quantidade;
                 });
             });
@@ -750,7 +772,7 @@
                     lucrosPorSabor[key].quantidade += item.quantidade;
                     lucrosPorSabor[key].receita += item.preco_unitario * item.quantidade;
                     // Usar preco_compra do produto (do JOIN na query)
-                    const precoCompra = (produto.preco_compra || 0);
+                    const precoCompra = obterCustoHistorico(item);
                     lucrosPorSabor[key].custo += precoCompra * item.quantidade;
                 }
             }
@@ -811,9 +833,7 @@
                     lucrosPorCliente[clienteNome].qtdProdutos += item.quantidade;
                     lucrosPorCliente[clienteNome].receita += item.preco_unitario * item.quantidade;
                     // Usar preco_compra_entrada da entrada se disponível, senão usar do cadastro do produto
-                    const precoCompra = item.preco_compra_entrada !== null && item.preco_compra_entrada !== undefined 
-                        ? item.preco_compra_entrada 
-                        : (produto.preco_compra || 0);
+                    const precoCompra = obterCustoHistorico(item);
                     lucrosPorCliente[clienteNome].custo += precoCompra * item.quantidade;
                 });
             });
@@ -973,9 +993,7 @@
                     if (filtroAtual.sabor && item.sabor_id !== filtroAtual.sabor) return;
                     
                     // Usar preco_compra_entrada da entrada se disponível, senão usar do cadastro do produto
-                    const custoUnitario = item.preco_compra_entrada !== null && item.preco_compra_entrada !== undefined 
-                        ? item.preco_compra_entrada 
-                        : (produto.preco_compra || 0);
+                    const custoUnitario = obterCustoHistorico(item);
                     const lucroUnitario = item.preco_unitario - custoUnitario;
                     const lucroTotal = lucroUnitario * item.quantidade;
                     
