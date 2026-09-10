@@ -17,6 +17,12 @@
             <!-- Header -->
             <div class="mb-8">
                 <a href="#" id="btn-voltar" class="text-blue-600 hover:text-blue-800 mb-4 inline-block">← Voltar</a>
+
+                <div id="banner-pedido-excluido" class="hidden mb-4 bg-red-50 border-l-4 border-red-500 p-4 rounded">
+                    <p class="text-red-800 font-semibold">🗑️ Este pedido foi excluído</p>
+                    <p id="banner-pedido-excluido-detalhe" class="text-red-700 text-sm mt-1"></p>
+                </div>
+
                 <div class="flex justify-between items-center">
                     <div>
                         <h2 id="pedido-numero" class="text-3xl font-bold text-gray-900">Pedido</h2>
@@ -891,6 +897,15 @@
 
             document.getElementById('pedido-numero').textContent = `Pedido ${pedido.numero}`;
             document.getElementById('pedido-status').innerHTML = getStatusBadge(pedido.status);
+
+            const bannerExcluido = document.getElementById('banner-pedido-excluido');
+            if (pedido.deleted_at) {
+                document.getElementById('banner-pedido-excluido-detalhe').textContent =
+                    `Excluído em ${formatDate(pedido.deleted_at)}. O registro foi mantido apenas para consulta e auditoria — nenhuma ação é permitida.`;
+                bannerExcluido.classList.remove('hidden');
+            } else {
+                bannerExcluido.classList.add('hidden');
+            }
             document.getElementById('pedido-total').textContent = formatCurrency(pedido.total);
             document.getElementById('pedido-solicitante').textContent = pedido.solicitante?.full_name || 'N/A';
             document.getElementById('pedido-fornecedor').textContent = pedido.fornecedor?.nome || '-';
@@ -922,12 +937,20 @@
             // Botão de impressão sempre visível
             let botoesHTML = '<button onclick="imprimirPedidoCompra(\'' + pedidoId + '\')" class="bg-gray-600 text-white px-6 py-2 rounded-lg hover:bg-gray-700">🖨️ Imprimir</button>';
             
-            const podeEditar = pedido.status === 'RASCUNHO';
-            
+            const podeEditar = !pedido.deleted_at && pedido.status === 'RASCUNHO';
+            // Excluir é mais restrito que editar: o perfil COMERCIAL (conta
+            // compartilhada) não pode mais excluir pedidos — só ADMIN ou o
+            // próprio solicitante que criou o rascunho.
+            const podeExcluir = podeEditar
+                && currentUser?.role !== 'COMERCIAL'
+                && (currentUser?.role === 'ADMIN' || pedido.solicitante_id === currentUser?.id);
+
             if (podeEditar) {
-                // Pedido em rascunho pode ser editado, finalizado e excluido
+                // Pedido em rascunho pode ser editado e finalizado
                 botoesHTML += ' <button onclick="finalizarPedidoHandler()" class="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700">✅ Finalizar Pedido</button>';
-                botoesHTML += ' <button onclick="excluirPedido()" class="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700">🗑️ Excluir Pedido</button>';
+                if (podeExcluir) {
+                    botoesHTML += ' <button onclick="excluirPedido()" class="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700">🗑️ Excluir Pedido</button>';
+                }
                 btnAddItem.style.display = 'block';
                 
                 // Mostrar botão de alteração em lote se houver itens (igual ao padrão de venda)
@@ -1457,7 +1480,12 @@
         }
 
         async function excluirPedido() {
-            if (!confirm('⚠️ Tem certeza que deseja EXCLUIR este pedido de compra?\n\nEsta ação NÃO pode ser desfeita!')) {
+            if (currentUser?.role === 'COMERCIAL') {
+                showToast('Seu perfil não tem permissão para excluir pedidos.', 'error');
+                return;
+            }
+
+            if (!confirm('⚠️ Tem certeza que deseja EXCLUIR este pedido de compra?\n\nEle sairá da lista de pedidos, mas o registro é mantido em "Pedidos Excluídos" para consulta e auditoria — a ação fica registrada com seu usuário e horário.')) {
                 return;
             }
             

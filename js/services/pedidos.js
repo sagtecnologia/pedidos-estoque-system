@@ -16,6 +16,17 @@ async function listPedidos(filters = {}) {
             `)
             .order('created_at', { ascending: false });
 
+        // Por padrão, nunca mostrar pedidos excluídos (soft delete) nas
+        // listagens normais. Passe filters.incluirExcluidos = true para
+        // a tela de "Pedidos Excluídos".
+        if (filters.incluirExcluidos) {
+            if (filters.somenteExcluidos) {
+                query = query.not('deleted_at', 'is', null);
+            }
+        } else {
+            query = query.is('deleted_at', null);
+        }
+
         if (filters.status) {
             query = query.eq('status', filters.status);
         }
@@ -36,7 +47,7 @@ async function listPedidos(filters = {}) {
 
         if (error) throw error;
         return data;
-        
+
     } catch (error) {
         handleError(error, 'Erro ao listar pedidos');
         return [];
@@ -667,84 +678,33 @@ async function getEstatisticasPedidos() {
 }
 
 // Excluir pedido (apenas RASCUNHO)
+// ⚠️ Isto NUNCA apaga o registro fisicamente. É uma exclusão LÓGICA
+// (soft delete) feita pela RPC excluir_pedido_soft: o pedido continua
+// no banco (marcado com deleted_at/deleted_by), o número nunca é
+// reaproveitado por outro pedido, e a ação fica registrada em
+// audit_log automaticamente. Ver database/sql_auditoria_e_soft_delete_pedidos.sql
 async function deletePedido(pedidoId) {
     try {
-        console.log('🗑️ Iniciando exclusão do pedido:', pedidoId);
-        
-        // Verificar se o pedido está em RASCUNHO
-        const { data: pedido, error: errorPedido } = await supabase
-            .from('pedidos')
-            .select('status, numero, tipo_pedido')
-            .eq('id', pedidoId)
-            .single();
-            
-        if (errorPedido) {
-            console.error('❌ Erro ao buscar pedido:', errorPedido);
-            throw errorPedido;
+        console.log('🗑️ Solicitando exclusão lógica do pedido:', pedidoId);
+
+        const { data, error } = await supabase
+            .rpc('excluir_pedido_soft', { p_pedido_id: pedidoId });
+
+        if (error) {
+            console.error('❌ Erro ao excluir pedido:', error);
+            throw error;
         }
-        
-        console.log('📋 Pedido encontrado:', pedido);
-        
-        if (pedido.status !== 'RASCUNHO') {
-            throw new Error('Apenas pedidos em RASCUNHO podem ser excluídos');
+
+        const resultado = Array.isArray(data) ? data[0] : data;
+
+        if (!resultado?.sucesso) {
+            throw new Error(resultado?.mensagem || 'Não foi possível excluir o pedido');
         }
-        
-        // ✅ DELETAR NA ORDEM CORRETA (respeitando Foreign Keys com RESTRICT)
-        
-        // PASSO 1: Deletar movimentações de estoque
-        console.log('🗑️ Deletando movimentações de estoque...');
-        const { error: err1 } = await supabase
-            .from('estoque_movimentacoes')
-            .delete()
-            .eq('pedido_id', pedidoId);
-        
-        if (err1) {
-            console.error('❌ Erro ao deletar movimentações:', err1);
-            throw err1;
-        }
-        console.log('✅ Movimentações deletadas');
-        
-        // PASSO 2: Deletar itens do pedido
-        console.log('🗑️ Deletando itens do pedido...');
-        const { error: err2 } = await supabase
-            .from('pedido_itens')
-            .delete()
-            .eq('pedido_id', pedidoId);
-            
-        if (err2) {
-            console.error('❌ Erro ao deletar itens:', err2);
-            throw err2;
-        }
-        console.log('✅ Itens deletados');
-        
-        // PASSO 3: Deletar cancelamentos
-        console.log('🗑️ Deletando histórico de cancelamentos...');
-        const { error: err3 } = await supabase
-            .from('cancelamento_pedidos')
-            .delete()
-            .eq('pedido_id', pedidoId);
-        
-        if (err3) {
-            console.error('❌ Erro ao deletar cancelamentos:', err3);
-            // Não lançar erro aqui pois cancelamento_pedidos pode não ter registros
-        }
-        
-        // PASSO 4: Deletar o pedido
-        console.log('🗑️ Deletando pedido...');
-        const { error: err4 } = await supabase
-            .from('pedidos')
-            .delete()
-            .eq('id', pedidoId);
-        
-        if (err4) {
-            console.error('❌ Erro ao deletar pedido:', err4);
-            throw err4;
-        }
-        
-        console.log('✅ Pedido deletado com sucesso!');
-        showToast(`${pedido.tipo_pedido === 'COMPRA' ? 'Pedido de compra' : 'Venda'} ${pedido.numero} excluído com sucesso!`, 'success');
+
+        console.log('✅ Pedido excluído (logicamente) com sucesso:', resultado);
+        showToast(`Pedido ${resultado.numero || ''} excluído com sucesso!`, 'success');
         return true;
-        
+
     } catch (error) {
         console.error('❌ Erro completo na exclusão:', error);
         handleError(error, 'Erro ao excluir pedido');

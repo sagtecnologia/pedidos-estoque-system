@@ -17,6 +17,12 @@
             <!-- Header -->
             <div class="mb-8">
                 <a href="#" id="btn-voltar" class="text-green-600 hover:text-green-800 mb-4 inline-block">← Voltar</a>
+
+                <div id="banner-venda-excluida" class="hidden mb-4 bg-red-50 border-l-4 border-red-500 p-4 rounded">
+                    <p class="text-red-800 font-semibold">🗑️ Este pedido foi excluído</p>
+                    <p id="banner-venda-excluida-detalhe" class="text-red-700 text-sm mt-1"></p>
+                </div>
+
                 <div class="flex justify-between items-center">
                     <div>
                         <h2 id="venda-numero" class="text-3xl font-bold text-gray-900">Venda</h2>
@@ -1197,6 +1203,15 @@
         function renderVenda() {
             document.getElementById('venda-numero').textContent = venda.numero;
             document.getElementById('venda-status').textContent = getStatusText(venda.status);
+
+            const bannerExcluida = document.getElementById('banner-venda-excluida');
+            if (venda.deleted_at) {
+                document.getElementById('banner-venda-excluida-detalhe').textContent =
+                    `Excluído em ${formatDate(venda.deleted_at)}. O registro foi mantido apenas para consulta e auditoria — nenhuma ação é permitida.`;
+                bannerExcluida.classList.remove('hidden');
+            } else {
+                bannerExcluida.classList.add('hidden');
+            }
             
             // Calcular total baseado nos itens carregados para garantir precisão
             const totalCalculado = itens.reduce((sum, item) => sum + (item.subtotal || 0), 0);
@@ -1527,7 +1542,7 @@
             
             const podeEditar = canEditCurrentVenda();
             // Permite finalizar vendas em RASCUNHO (novo fluxo) ou APROVADO (pedidos antigos já aprovados)
-            const podeFinalizar = ['RASCUNHO', 'APROVADO'].includes(venda.status) && ['ADMIN', 'VENDEDOR', 'COMERCIAL'].includes(currentUser.role);
+            const podeFinalizar = !venda.deleted_at && ['RASCUNHO', 'APROVADO'].includes(venda.status) && ['ADMIN', 'VENDEDOR', 'COMERCIAL'].includes(currentUser.role);
             
             if (podeEditar) {
                 document.getElementById('btn-add-item').style.display = 'block';
@@ -1536,7 +1551,9 @@
                 if (btnAlterarPrecoLote) {
                     btnAlterarPrecoLote.style.display = itens.length > 0 ? 'block' : 'none';
                 }
-                botoes.push('<button onclick="excluirVenda()" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700">🗑️ Excluir Venda</button>');
+                if (podeExcluirVenda()) {
+                    botoes.push('<button onclick="excluirVenda()" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700">🗑️ Excluir Venda</button>');
+                }
             } else {
                 document.getElementById('btn-add-item').style.display = 'none';
                 // Mostrar botão de alteração em lote também para vendas FINALIZADAS
@@ -1757,10 +1774,25 @@
         // Funções de aprovação removidas - vendas agora finalizam diretamente do RASCUNHO
 
         function canEditCurrentVenda() {
+            if (venda?.deleted_at) return false; // pedido excluído: somente consulta
             const isAdmin = currentUser?.role === 'ADMIN';
             const isComercial = currentUser?.role === 'COMERCIAL';
             const isSolicitanteDaVenda = venda?.solicitante_id === currentUser?.id;
             return venda?.status === 'RASCUNHO' && (isSolicitanteDaVenda || isAdmin || isComercial);
+        }
+
+        // Excluir é mais restrito que editar: o perfil COMERCIAL pode
+        // adicionar/editar itens de qualquer rascunho, mas NÃO pode mais
+        // excluir pedidos — só ADMIN ou o próprio solicitante (desde que
+        // não seja a conta COMERCIAL, que é compartilhada entre vários
+        // atendentes e não deve ter esse poder).
+        function podeExcluirVenda() {
+            if (venda?.deleted_at) return false;
+            if (venda?.status !== 'RASCUNHO') return false;
+            if (currentUser?.role === 'COMERCIAL') return false;
+            const isAdmin = currentUser?.role === 'ADMIN';
+            const isSolicitanteDaVenda = venda?.solicitante_id === currentUser?.id;
+            return isAdmin || isSolicitanteDaVenda;
         }
 
         async function finalizarVenda() {
@@ -1886,7 +1918,12 @@
         }
 
         async function excluirVenda() {
-            if (!confirm('⚠️ Tem certeza que deseja EXCLUIR esta venda?\n\nEsta ação NÃO pode ser desfeita!')) {
+            if (!podeExcluirVenda()) {
+                showToast('Seu perfil não tem permissão para excluir vendas.', 'error');
+                return;
+            }
+
+            if (!confirm('⚠️ Tem certeza que deseja EXCLUIR esta venda?\n\nEla sairá da lista de vendas, mas o registro é mantido em "Pedidos Excluídos" para consulta e auditoria — a ação fica registrada com seu usuário e horário.')) {
                 return;
             }
             

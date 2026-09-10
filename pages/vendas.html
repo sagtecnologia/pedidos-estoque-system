@@ -234,8 +234,9 @@
                         solicitante:users!pedidos_solicitante_id_fkey(full_name),
                         pedido_itens(quantidade)
                     `)
-                    .eq('tipo_pedido', 'VENDA');
-                
+                    .eq('tipo_pedido', 'VENDA')
+                    .is('deleted_at', null);
+
                 if (status) {
                     query = query.eq('status', status);
                 }

@@ -240,8 +240,9 @@
                         solicitante:users!pedidos_solicitante_id_fkey(full_name),
                         pedido_itens(quantidade)
                     `)
-                    .eq('tipo_pedido', 'COMPRA');
-                
+                    .eq('tipo_pedido', 'COMPRA')
+                    .is('deleted_at', null);
+
                 if (status) {
                     query = query.eq('status', status);
                 }

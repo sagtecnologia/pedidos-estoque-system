@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pedidos Excluídos - Sistema de Pedidos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body class="bg-gray-100">
+    <div id="navbar-container"></div>
+    <div id="sidebar-container"></div>
+
+    <main class="lg:ml-64 pt-16">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Cabeçalho -->
+            <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                <h1 class="text-2xl font-bold text-gray-800">🗑️ Pedidos Excluídos</h1>
+                <p class="text-gray-600 mt-1">
+                    Pedidos excluídos nunca são apagados fisicamente — ficam registrados aqui, com quem excluiu e quando,
+                    para consulta e auditoria.
+                </p>
+            </div>
+
+            <!-- Filtros -->
+            <div class="bg-white rounded-lg shadow-md p-4 mb-6">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Tipo</label>
+                        <select id="filtro-tipo" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
+                            <option value="">Todos</option>
+                            <option value="VENDA">Venda</option>
+                            <option value="COMPRA">Compra</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Buscar por número</label>
+                        <input type="text" id="filtro-numero" placeholder="Ex: VENDA-20260910-00003"
+                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div class="flex items-end">
+                        <button onclick="carregarPedidosExcluidos()" class="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                            <i class="fas fa-search mr-2"></i>Buscar
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabela -->
+            <div class="bg-white rounded-lg shadow-md overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Número</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tipo</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cliente/Fornecedor</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Criado em</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Excluído por</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Excluído em</th>
+                                <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pedidos-excluidos-tbody" class="bg-white divide-y divide-gray-200">
+                            <tr>
+                                <td colspan="8" class="px-6 py-12 text-center text-gray-500">
+                                    <i class="fas fa-spinner fa-spin text-3xl mb-3"></i>
+                                    <p>Carregando pedidos excluídos...</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../js/config.js"></script>
+    <script src="../js/session-manager.js"></script>
+    <script src="../js/utils.js"></script>
+    <script src="../js/auth.js"></script>
+    <script src="../components/navbar.js"></script>
+    <script src="../components/sidebar.js"></script>
+
+    <script>
+        let currentUser = null;
+
+        function getTipoBadge(tipo) {
+            return tipo === 'VENDA'
+                ? '<span class="px-2 py-1 text-xs rounded-full bg-green-100 text-green-800">Venda</span>'
+                : '<span class="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">Compra</span>';
+        }
+
+        async function carregarPedidosExcluidos() {
+            const tbody = document.getElementById('pedidos-excluidos-tbody');
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="8" class="px-6 py-12 text-center text-gray-500">
+                        <i class="fas fa-spinner fa-spin text-3xl mb-3"></i>
+                        <p>Carregando pedidos excluídos...</p>
+                    </td>
+                </tr>
+            `;
+
+            try {
+                const tipo = document.getElementById('filtro-tipo').value;
+                const numero = document.getElementById('filtro-numero').value.trim();
+
+                let query = supabase
+                    .from('pedidos')
+                    .select(`
+                        id, numero, tipo_pedido, status, total, created_at, deleted_at,
+                        cliente:clientes(nome),
+                        fornecedor:fornecedores(nome),
+                        excluido_por:users!pedidos_deleted_by_fkey(full_name)
+                    `)
+                    .not('deleted_at', 'is', null)
+                    .order('deleted_at', { ascending: false });
+
+                if (tipo) query = query.eq('tipo_pedido', tipo);
+                if (numero) query = query.ilike('numero', `%${numero}%`);
+
+                const { data, error } = await query;
+                if (error) throw error;
+
+                renderPedidosExcluidos(data || []);
+            } catch (error) {
+                console.error('Erro ao carregar pedidos excluídos:', error);
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" class="px-6 py-12 text-center text-red-500">
+                            Erro ao carregar pedidos excluídos: ${error.message || 'tente novamente'}.
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+
+        function renderPedidosExcluidos(pedidos) {
+            const tbody = document.getElementById('pedidos-excluidos-tbody');
+
+            if (pedidos.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="8" class="px-6 py-12 text-center text-gray-500">
+                            <i class="fas fa-check-circle text-3xl mb-3 text-green-400"></i>
+                            <p>Nenhum pedido excluído encontrado.</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = pedidos.map(p => {
+                const linkDetalhe = p.tipo_pedido === 'VENDA'
+                    ? `/pages/venda-detalhe.html?id=${p.id}`
+                    : `/pages/pedido-detalhe.html?id=${p.id}`;
+
+                return `
+                    <tr class="hover:bg-gray-50">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${p.numero}</td>
+                        <td class="px-6 py-4 whitespace-nowrap">${getTipoBadge(p.tipo_pedido)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${p.cliente?.nome || p.fornecedor?.nome || '-'}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${formatCurrency(p.total || 0)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${formatDate(p.created_at)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-700">${p.excluido_por?.full_name || '-'}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${formatDate(p.deleted_at)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-center text-sm">
+                            <a href="${linkDetalhe}" class="text-blue-600 hover:text-blue-800">Ver Detalhes</a>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Inicialização
+        (async () => {
+            await checkAuth();
+            currentUser = await getCurrentUser();
+
+            // Somente quem tem permissão de excluir pedidos (ADMIN/COMERCIAL) acessa esta tela
+            if (!['ADMIN', 'COMERCIAL'].includes(currentUser?.role)) {
+                window.location.href = '/pages/dashboard.html';
+                return;
+            }
+
+            document.getElementById('navbar-container').innerHTML = createNavbar();
+            document.getElementById('sidebar-container').innerHTML = createSidebar();
+            await initNavbar();
+            await initSidebar();
+            carregarPedidosExcluidos();
+        })();
+    </script>
+</body>
+</html>
