@@ -14,16 +14,21 @@
 
     <main class="lg:ml-64 pt-16">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div class="flex justify-between items-center mb-8">
+            <div class="flex flex-wrap justify-between items-center gap-4 mb-8">
                 <div>
                     <h2 class="text-3xl font-bold text-gray-900">
                         <i class="fas fa-box mr-3 text-purple-600"></i>Produtos
                     </h2>
                     <p class="text-gray-600 mt-1">Gerenciamento de produtos</p>
                 </div>
+                <div class="flex flex-wrap gap-3">
+                <button type="button" onclick="abrirListaTodosProdutos()" class="bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition">
+                    <i class="fas fa-copy mr-2"></i>Gerar lista de todos
+                </button>
                 <button id="btn-novo-produto" onclick="abrirNovoProdutoModal()" class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition">
                     + Novo Produto
                 </button>
+                </div>
             </div>
 
             <!-- Filtros -->
@@ -162,6 +167,23 @@
                     <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">Salvar Produto</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <div id="modal-lista-produto" class="modal-backdrop hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center px-6 py-4 border-b">
+                <h3 id="lista-produto-titulo" class="text-lg font-semibold text-gray-900">Lista de produto e sabores</h3>
+                <button type="button" onclick="closeModal('modal-lista-produto')" aria-label="Fechar lista" class="text-gray-500 hover:text-gray-700"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="px-6 py-4">
+                <p class="text-sm text-gray-600 mb-3">Sabores com estoque disponível. Copie e cole a lista na sua mensagem.</p>
+                <textarea id="lista-produto-texto" readonly aria-label="Lista para copiar" class="w-full rounded-lg p-4 text-white text-sm leading-6 resize-y" style="background-color: #005440; min-height: 320px; font-family: Arial, sans-serif;"></textarea>
+                <div class="flex justify-end gap-3 mt-4">
+                    <button type="button" onclick="closeModal('modal-lista-produto')" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Fechar</button>
+                    <button type="button" onclick="copiarListaProduto()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"><i class="fas fa-copy mr-2"></i>Copiar lista</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -435,6 +457,7 @@
                         <div class="text-sm text-gray-600">Acima de 100: ${formatCurrency(getPrecoTabelaProduto(p, 'preco_atacado'))}</div>
                     </td>
                     <td class="px-6 py-4 text-sm space-x-2">
+                        <button type="button" onclick="abrirListaProduto('${p.id}')" class="text-green-700 hover:text-green-900 whitespace-nowrap"><i class="fas fa-copy mr-1"></i>Gerar lista</button>
                         ${isRestrictedCommercialRole(currentUser)
                             ? `
                                 <button onclick="editProduto('${p.id}')" class="text-blue-600 hover:text-blue-800">Editar</button>
@@ -449,6 +472,98 @@
 
                     return cabecalhoMarca + linhasProdutos;
                 }).join('');
+        }
+
+        function gerarTextoListaProduto(produto, sabores) {
+            const disponiveis = sabores
+                .filter(s => s.ativo === true && Number(s.quantidade) > 0)
+                .sort((a, b) => a.sabor.localeCompare(b.sabor, 'pt-BR'));
+            const formatarQuantidade = quantidade => Number.isInteger(quantidade)
+                ? String(quantidade).padStart(2, '0')
+                : quantidade.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+            const linhas = disponiveis.map(s => `▪️ ${formatarQuantidade(Number(s.quantidade))} ${s.sabor.toUpperCase()}`);
+            const total = Math.round(disponiveis.reduce((soma, s) => soma + Number(s.quantidade), 0) * 100) / 100;
+            return [`☁️🔥 ${produto.nome.toUpperCase()}`, '🔥☁️', '', ...linhas, '', `📦 TOTAL: ${formatarQuantidade(total)} PEÇAS`].join('\n');
+        }
+
+        async function abrirListaProduto(produtoId) {
+            const produto = produtosListados.find(p => p.id === produtoId);
+            if (!produto) return;
+            try {
+                showLoading(true);
+                const { data: sabores, error } = await supabase
+                    .from('produto_sabores')
+                    .select('sabor, quantidade, ativo')
+                    .eq('produto_id', produtoId)
+                    .eq('ativo', true)
+                    .order('sabor');
+                if (error) throw error;
+                document.getElementById('lista-produto-titulo').textContent = 'Lista de produto e sabores';
+                document.getElementById('lista-produto-texto').value = gerarTextoListaProduto(produto, sabores || []);
+                openModal('modal-lista-produto');
+            } catch (error) {
+                handleError(error, 'Erro ao gerar lista do produto');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function abrirListaTodosProdutos() {
+            try {
+                showLoading(true);
+                const grupos = new Map();
+                const tamanhoPagina = 500;
+                for (let inicio = 0; ; inicio += tamanhoPagina) {
+                    const { data, error } = await supabase
+                        .from('produto_sabores')
+                        .select('sabor, quantidade, ativo, produto:produtos!inner(id, nome, marca, active)')
+                        .eq('ativo', true)
+                        .eq('produto.active', true)
+                        .gt('quantidade', 0)
+                        .order('id')
+                        .range(inicio, inicio + tamanhoPagina - 1);
+                    if (error) throw error;
+                    for (const sabor of data || []) {
+                        const produto = sabor.produto;
+                        if (!grupos.has(produto.id)) grupos.set(produto.id, { produto, sabores: [] });
+                        grupos.get(produto.id).sabores.push(sabor);
+                    }
+                    if ((data || []).length < tamanhoPagina) break;
+                }
+                if (!grupos.size) {
+                    showToast('Nenhum produto com sabores em estoque disponível.', 'info');
+                    return;
+                }
+                const listas = [...grupos.values()]
+                    .sort((a, b) => (a.produto.marca || '').localeCompare(b.produto.marca || '', 'pt-BR')
+                        || a.produto.nome.localeCompare(b.produto.nome, 'pt-BR'))
+                    .map(grupo => gerarTextoListaProduto(grupo.produto, grupo.sabores));
+                document.getElementById('lista-produto-titulo').textContent = 'Lista de todos os produtos e sabores';
+                document.getElementById('lista-produto-texto').value = listas.join('\n\n\n');
+                openModal('modal-lista-produto');
+            } catch (error) {
+                handleError(error, 'Erro ao gerar lista de todos os produtos');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function copiarListaProduto() {
+            const campo = document.getElementById('lista-produto-texto');
+            try {
+                if (!navigator.clipboard?.writeText) throw new Error('Copiar manualmente');
+                await navigator.clipboard.writeText(campo.value);
+                showToast('Lista copiada! Cole na sua mensagem.', 'success');
+            } catch {
+                campo.focus();
+                campo.select();
+                campo.setSelectionRange(0, campo.value.length);
+                if (document.execCommand('copy')) {
+                    showToast('Lista copiada! Cole na sua mensagem.', 'success');
+                } else {
+                    showToast('Selecionei a lista. Use Ctrl+C ou a opção Copiar do celular.', 'info');
+                }
+            }
         }
 
         window.toggleMarcaProdutos = function(indiceMarca) {

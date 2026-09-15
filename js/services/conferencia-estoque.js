@@ -210,8 +210,11 @@ async function aprovarConferencia(conferenciaId) {
             throw new Error(resultado.mensagem || 'Não foi possível aprovar a conferência');
         }
 
+        const avisoIgnorados = resultado.itens_ignorados > 0
+            ? ` ${resultado.itens_ignorados} item(ns) foram ignorados (sabor removido/inativado após a contagem).`
+            : '';
         showToast(
-            `Conferência aprovada! ${resultado.itens_atualizados} item(ns) atualizado(s).`,
+            `Conferência aprovada! ${resultado.itens_atualizados} item(ns) atualizado(s).${avisoIgnorados}`,
             'success'
         );
         return resultado;
