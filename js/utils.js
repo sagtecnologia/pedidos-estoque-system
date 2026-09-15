@@ -91,7 +91,8 @@ const COMMERCIAL_ALLOWED_PATHS = Object.freeze([
     '/pages/pedido-detalhe.html',
     '/pages/vendas.html',
     '/pages/venda-detalhe.html',
-    '/pages/pre-pedidos.html'
+    '/pages/pre-pedidos.html',
+    '/pages/conferencia-estoque.html'
 ]);
 
 function getRoleValue(userOrRole) {
@@ -357,6 +358,10 @@ function getStatusBadge(status) {
         'REJEITADO': '<span class="px-2 py-1 text-xs rounded-full bg-red-200 text-red-800">Rejeitado</span>',
         'FINALIZADO': '<span class="px-2 py-1 text-xs rounded-full bg-purple-200 text-purple-800">Finalizado</span>',
         'CANCELADO': '<span class="px-2 py-1 text-xs rounded-full bg-red-300 text-red-900">Cancelado</span>',
+        'PENDENTE': '<span class="px-2 py-1 text-xs rounded-full bg-blue-200 text-blue-800">Pendente</span>',
+        'APROVADA': '<span class="px-2 py-1 text-xs rounded-full bg-green-200 text-green-800">Aprovada</span>',
+        'REJEITADA': '<span class="px-2 py-1 text-xs rounded-full bg-red-200 text-red-800">Rejeitada</span>',
+        'CANCELADA': '<span class="px-2 py-1 text-xs rounded-full bg-red-300 text-red-900">Cancelada</span>',
         'SEPARADO': '<span class="px-2 py-1 text-xs rounded-full bg-indigo-200 text-indigo-800">Separado</span>',
         'DESPACHADO': '<span class="px-2 py-1 text-xs rounded-full bg-teal-200 text-teal-800">Despachado</span>',
         

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aprovar Conferências de Estoque - Sistema de Compras</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body class="bg-gray-100">
+    <div id="navbar"></div>
+    <div id="sidebar-container"></div>
+
+    <main class="lg:ml-64 pt-16">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <div class="mb-6">
+                <h2 class="text-3xl font-bold text-gray-900 flex items-center gap-3">
+                    <i class="fas fa-clipboard-check text-teal-600"></i>
+                    Aprovar Conferências de Estoque
+                </h2>
+                <p class="text-gray-600 mt-1">Revisar contagens enviadas e aplicar (ou rejeitar) as novas quantidades no estoque</p>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
+                <select id="filter-status" onchange="loadConferencias()" class="w-full px-4 py-2 border border-gray-300 rounded-lg">
+                    <option value="PENDENTE">Pendentes de Aprovação</option>
+                    <option value="APROVADA">Aprovadas</option>
+                    <option value="REJEITADA">Rejeitadas</option>
+                    <option value="CANCELADA">Canceladas</option>
+                    <option value="">Todas</option>
+                </select>
+            </div>
+
+            <div id="conferencias-container" class="space-y-4"></div>
+        </div>
+    </main>
+
+    <!-- Modal Detalhes -->
+    <div id="modal-detalhes" class="modal-backdrop hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[85vh] flex flex-col">
+            <div class="flex justify-between items-center px-6 py-4 border-b flex-shrink-0">
+                <h3 class="text-lg font-semibold text-gray-900">Detalhes da Conferência</h3>
+                <button onclick="closeModal('modal-detalhes')" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div id="detalhes-content" class="px-6 py-4 overflow-y-auto flex-1"></div>
+        </div>
+    </div>
+
+    <!-- Modal Rejeitar -->
+    <div id="modal-rejeitar" class="modal-backdrop hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div class="flex justify-between items-center px-6 py-4 border-b">
+                <h3 class="text-lg font-semibold text-gray-900">Rejeitar Conferência</h3>
+                <button onclick="closeModal('modal-rejeitar')" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <form id="form-rejeitar" class="px-6 py-4">
+                <input type="hidden" id="rejeitar-conferencia-id">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Motivo da Rejeição*</label>
+                        <textarea id="motivo-rejeicao" required rows="4" class="w-full px-4 py-2 border border-gray-300 rounded-lg" placeholder="Explique o motivo da rejeição..."></textarea>
+                    </div>
+                </div>
+                <div class="flex justify-end space-x-3 mt-6">
+                    <button type="button" onclick="closeModal('modal-rejeitar')" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">Rejeitar Conferência</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="loading" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-lg"><div class="spinner mx-auto"></div><p class="mt-4 text-gray-700">Carregando...</p></div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../js/config.js"></script>
+    <script src="../js/session-manager.js"></script>
+    <script src="../js/utils.js"></script>
+    <script src="../js/auth.js"></script>
+    <script src="../js/services/conferencia-estoque.js"></script>
+    <script src="../components/navbar.js"></script>
+    <script src="../components/sidebar.js"></script>
+    <script src="../components/modal.js"></script>
+
+    <script>
+        let currentUser = null;
+
+        (async () => {
+            await checkAuth();
+            currentUser = await getCurrentUser();
+
+            if (!currentUser || currentUser.role !== 'ADMIN') {
+                showToast('Acesso negado', 'error');
+                redirect('/pages/dashboard.html');
+                return;
+            }
+
+            document.getElementById('navbar').innerHTML = createNavbar();
+            document.getElementById('sidebar-container').innerHTML = createSidebar();
+            await initNavbar();
+            await initSidebar();
+
+            await loadConferencias();
+        })();
+
+        async function loadConferencias() {
+            const status = document.getElementById('filter-status').value;
+            const filters = status ? { status } : {};
+
+            const conferencias = await listConferencias(filters);
+            const container = document.getElementById('conferencias-container');
+
+            if (conferencias.length === 0) {
+                container.innerHTML = '<div class="bg-white rounded-lg shadow p-6 text-center text-gray-500">Nenhuma conferência encontrada</div>';
+                return;
+            }
+
+            container.innerHTML = conferencias.map(c => `
+                <div class="bg-white rounded-lg shadow p-6">
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-900">Conferência #${c.numero}</h3>
+                            <p class="text-sm text-gray-600">Contado por: ${c.criado_por_usuario?.full_name || 'N/A'}</p>
+                            ${c.aprovado_por_usuario ? `<p class="text-sm text-gray-600">${c.status === 'REJEITADA' ? 'Rejeitado' : 'Aprovado'} por: ${c.aprovado_por_usuario.full_name}</p>` : ''}
+                        </div>
+                        <div class="text-right">
+                            ${getStatusBadge(c.status)}
+                            <p class="text-xs text-gray-500 mt-2">Enviada em: ${c.enviado_em ? formatDateTime(c.enviado_em) : '-'}</p>
+                        </div>
+                    </div>
+
+                    ${c.observacao ? `<p class="text-sm text-gray-600 mb-4"><strong>Obs:</strong> ${c.observacao}</p>` : ''}
+
+                    ${c.status === 'REJEITADA' && c.motivo_rejeicao ?
+                        `<div class="bg-red-50 border border-red-200 rounded p-3 mb-4">
+                            <p class="text-sm text-red-800"><strong>Motivo da Rejeição:</strong> ${c.motivo_rejeicao}</p>
+                        </div>` : ''}
+
+                    <div class="flex space-x-2 mt-4">
+                        <button onclick="verDetalhes('${c.id}')" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm">
+                            Ver Detalhes
+                        </button>
+
+                        ${c.status === 'PENDENTE' ? `
+                            <button onclick="aprovarConferenciaHandler('${c.id}')" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm">
+                                Aprovar
+                            </button>
+                            <button onclick="abrirModalRejeitar('${c.id}')" class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm">
+                                Rejeitar
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function verDetalhes(conferenciaId) {
+            const [conferencia, itens] = await Promise.all([
+                getConferencia(conferenciaId),
+                getItensConferencia(conferenciaId)
+            ]);
+
+            if (!conferencia) return;
+
+            const content = document.getElementById('detalhes-content');
+            content.innerHTML = `
+                <div class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4 text-sm">
+                        <div><strong>Número:</strong> #${conferencia.numero}</div>
+                        <div><strong>Status:</strong> ${getStatusBadge(conferencia.status)}</div>
+                        <div><strong>Contado por:</strong> ${conferencia.criado_por_usuario?.full_name || 'N/A'}</div>
+                        <div><strong>Enviada em:</strong> ${conferencia.enviado_em ? formatDateTime(conferencia.enviado_em) : '-'}</div>
+                    </div>
+
+                    ${conferencia.observacao ? `<div class="bg-gray-50 p-3 rounded"><strong>Observações:</strong> ${conferencia.observacao}</div>` : ''}
+
+                    <div>
+                        <h4 class="font-semibold mb-2">Itens contados (${itens.length}):</h4>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full text-sm">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-3 py-2 text-left">Produto / Sabor</th>
+                                        <th class="px-3 py-2 text-center">Estoque Anterior</th>
+                                        <th class="px-3 py-2 text-center">Estoque Contado</th>
+                                        <th class="px-3 py-2 text-center">Diferença</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${itens.map(item => renderLinhaItemDetalhe(item, conferencia.status)).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    ${conferencia.status === 'PENDENTE' ? `
+                        <div class="flex space-x-2 pt-4 border-t">
+                            <button onclick="aprovarConferenciaHandler('${conferencia.id}'); closeModal('modal-detalhes');" class="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                                Aprovar
+                            </button>
+                            <button onclick="abrirModalRejeitar('${conferencia.id}'); closeModal('modal-detalhes');" class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+                                Rejeitar
+                            </button>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+
+            openModal('modal-detalhes');
+        }
+
+        function renderLinhaItemDetalhe(item, statusConferencia) {
+            const estoqueVivo = parseFloat(item.sabor?.quantidade) || 0;
+            const estoqueAnteriorSnapshot = parseFloat(item.estoque_anterior) || 0;
+            const estoqueNovo = parseFloat(item.estoque_novo) || 0;
+            const diff = estoqueNovo - estoqueVivo;
+            const diffClass = diff > 0 ? 'text-green-600 font-semibold' : diff < 0 ? 'text-red-600 font-semibold' : 'text-gray-400';
+
+            // Se ainda está PENDENTE e o estoque ao vivo já mudou desde a contagem, avisa o admin.
+            const divergiu = statusConferencia === 'PENDENTE' && estoqueVivo !== estoqueAnteriorSnapshot;
+
+            return `
+                <tr class="border-t ${divergiu ? 'bg-yellow-50' : ''}">
+                    <td class="px-3 py-2">
+                        <div class="font-medium text-gray-900">${item.produto?.nome || 'N/A'}</div>
+                        <div class="text-xs text-gray-500">${item.produto?.marca || ''} ${item.sabor?.sabor ? '| ' + item.sabor.sabor : ''}</div>
+                        ${divergiu ? `<div class="text-xs text-yellow-700 mt-0.5"><i class="fas fa-triangle-exclamation"></i> Estoque mudou desde a contagem (era ${estoqueAnteriorSnapshot.toFixed(2)}, agora é ${estoqueVivo.toFixed(2)})</div>` : ''}
+                    </td>
+                    <td class="px-3 py-2 text-center">${estoqueVivo.toFixed(2)}</td>
+                    <td class="px-3 py-2 text-center font-semibold">${estoqueNovo.toFixed(2)}</td>
+                    <td class="px-3 py-2 text-center ${diffClass}">${diff >= 0 ? '+' : ''}${diff.toFixed(2)}</td>
+                </tr>`;
+        }
+
+        async function aprovarConferenciaHandler(conferenciaId) {
+            const resultado = await aprovarConferencia(conferenciaId);
+            if (resultado) {
+                await loadConferencias();
+            }
+        }
+
+        function abrirModalRejeitar(conferenciaId) {
+            document.getElementById('rejeitar-conferencia-id').value = conferenciaId;
+            document.getElementById('motivo-rejeicao').value = '';
+            openModal('modal-rejeitar');
+        }
+
+        document.getElementById('form-rejeitar').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const conferenciaId = document.getElementById('rejeitar-conferencia-id').value;
+            const motivo = document.getElementById('motivo-rejeicao').value;
+
+            const resultado = await rejeitarConferencia(conferenciaId, motivo);
+            if (resultado) {
+                closeModal('modal-rejeitar');
+                await loadConferencias();
+            }
+        });
+    </script>
+</body>
+</html>

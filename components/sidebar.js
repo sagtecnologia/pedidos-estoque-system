@@ -77,6 +77,21 @@ function createSidebar() {
                         Ajuste de Estoque
                     </a>
 
+                    <a href="/pages/conferencia-estoque.html" id="menu-conferencia-estoque" class="sidebar-link group flex items-center px-4 py-3 text-sm font-medium rounded-md hover:bg-gray-700 transition">
+                        <svg class="mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+                        </svg>
+                        Conferência de Estoque
+                    </a>
+
+                    <a href="/pages/conferencia-estoque-aprovacao.html" id="menu-conferencia-estoque-aprovacao" class="sidebar-link group flex items-center px-4 py-3 text-sm font-medium rounded-md hover:bg-gray-700 transition">
+                        <svg class="mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        <span class="flex-1">Aprovar Conferências</span>
+                        <span id="badge-conferencia-estoque" class="hidden ml-2 px-2 py-1 text-xs font-semibold rounded-full bg-orange-500 text-white"></span>
+                    </a>
+
                     <a href="/pages/pedidos.html" id="menu-compras" class="sidebar-link group flex items-center px-4 py-3 text-sm font-medium rounded-md hover:bg-gray-700 transition">
                         <svg class="mr-3 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"></path>
@@ -206,11 +221,13 @@ async function initSidebar() {
         }
 
         if (role !== 'ADMIN') {
-            hideMenuItems(['menu-analise', 'menu-reprocessar-estoque', 'menu-ajuste-estoque', 'menu-auditoria']);
+            hideMenuItems(['menu-analise', 'menu-reprocessar-estoque', 'menu-ajuste-estoque', 'menu-auditoria',
+                          'menu-conferencia-estoque-aprovacao']);
         }
     }
 
     await initPrePedidosBadge();
+    await initConferenciaEstoqueBadge();
 
     // Fechar sidebar ao clicar fora (mobile)
     document.addEventListener('click', (e) => {
@@ -287,6 +304,61 @@ async function atualizarBadgePrePedidos() {
         badge.classList.toggle('hidden', total === 0);
     } catch (error) {
         console.error('Erro ao atualizar badge de pre-pedidos:', error);
+        badge.classList.add('hidden');
+    }
+}
+
+async function initConferenciaEstoqueBadge() {
+    const menuItem = document.getElementById('menu-conferencia-estoque-aprovacao');
+    const badge = document.getElementById('badge-conferencia-estoque');
+
+    if (!menuItem || !badge || menuItem.style.display === 'none' || !window.supabase) {
+        return;
+    }
+
+    await atualizarBadgeConferenciaEstoque();
+
+    if (window.conferenciaEstoqueBadgeInterval) {
+        clearInterval(window.conferenciaEstoqueBadgeInterval);
+    }
+    window.conferenciaEstoqueBadgeInterval = setInterval(atualizarBadgeConferenciaEstoque, 30000);
+
+    if (window.conferenciaEstoqueBadgeChannel) {
+        window.supabase.removeChannel(window.conferenciaEstoqueBadgeChannel);
+    }
+
+    if (typeof window.supabase.channel === 'function') {
+        window.conferenciaEstoqueBadgeChannel = window.supabase
+            .channel('sidebar-conferencia-estoque-count')
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'conferencias_estoque'
+            }, atualizarBadgeConferenciaEstoque)
+            .subscribe();
+    }
+}
+
+async function atualizarBadgeConferenciaEstoque() {
+    const badge = document.getElementById('badge-conferencia-estoque');
+    if (!badge || !window.supabase) {
+        return;
+    }
+
+    try {
+        const { count, error } = await window.supabase
+            .from('conferencias_estoque')
+            .select('*', { count: 'exact', head: true })
+            .eq('status', 'PENDENTE');
+
+        if (error) throw error;
+
+        const total = count || 0;
+        badge.textContent = total > 99 ? '99+' : total;
+        badge.title = `${total} conferência${total === 1 ? '' : 's'} de estoque pendente${total === 1 ? '' : 's'}`;
+        badge.classList.toggle('hidden', total === 0);
+    } catch (error) {
+        console.error('Erro ao atualizar badge de conferência de estoque:', error);
         badge.classList.add('hidden');
     }
 }
