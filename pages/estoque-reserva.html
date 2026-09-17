@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Estoque Reserva - Sistema de Compras</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body class="bg-gray-100">
+    <div id="navbar"></div>
+    <div id="sidebar-container"></div>
+
+    <main class="lg:ml-64 pt-16">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+            <div class="mb-6 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                <div>
+                    <h2 class="text-3xl font-bold text-gray-900 flex items-center gap-3">
+                        <i class="fas fa-right-left text-blue-600"></i>
+                        Estoque Reserva
+                    </h2>
+                    <p class="text-gray-500 mt-1">Mova produtos e sabores do estoque principal para outro estoque, com opção de devolver depois.</p>
+                </div>
+                <button onclick="abrirModalNovoEstoque()"
+                    class="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium transition shadow-sm flex-shrink-0">
+                    <i class="fas fa-plus"></i> Novo Estoque
+                </button>
+            </div>
+
+            <!-- Lista de estoques cadastrados -->
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5 mb-6">
+                <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">Estoques cadastrados</h3>
+                <div id="lista-estoques" class="flex flex-wrap gap-2">
+                    <span class="text-gray-400 text-sm"><i class="fas fa-spinner fa-spin"></i> Carregando...</span>
+                </div>
+            </div>
+
+            <!-- Abas -->
+            <div class="border-b border-gray-200 mb-6">
+                <nav class="flex gap-6 -mb-px">
+                    <button onclick="mudarAba('mover')" id="tab-btn-mover"
+                        class="tab-btn py-3 px-1 border-b-2 font-medium text-sm border-blue-600 text-blue-600">
+                        <i class="fas fa-arrow-right"></i> Mover para Reserva
+                    </button>
+                    <button onclick="mudarAba('devolver')" id="tab-btn-devolver"
+                        class="tab-btn py-3 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-arrow-left"></i> Saldos em Reserva / Devolver
+                    </button>
+                    <button onclick="mudarAba('historico')" id="tab-btn-historico"
+                        class="tab-btn py-3 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700">
+                        <i class="fas fa-history"></i> Histórico
+                    </button>
+                </nav>
+            </div>
+
+            <!-- ABA: Mover para Reserva -->
+            <div id="aba-mover" class="tab-content">
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5 mb-4">
+                    <div class="grid grid-cols-1 md:grid-cols-[1fr_260px_auto] gap-4 items-end">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Buscar produto ou sabor</label>
+                            <div class="relative">
+                                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none"></i>
+                                <input id="busca-mover" type="text" placeholder="Digite para filtrar..."
+                                    class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                                    oninput="renderizarTabelaMover()">
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Estoque de destino</label>
+                            <select id="select-estoque-destino" onchange="renderizarTabelaMover()" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                                <option value="">Selecione...</option>
+                            </select>
+                        </div>
+                        <div>
+                            <button id="btn-mover-todos" onclick="moverTodosFiltrados()" disabled
+                                title="Move todos os itens filtrados abaixo que tiverem quantidade preenchida"
+                                class="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm transition disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap">
+                                <i class="fas fa-layer-group"></i> Mover Preenchidos
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="lista-mover" class="space-y-3">
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center text-gray-400">
+                        <i class="fas fa-spinner fa-spin text-2xl mb-2 block"></i> Carregando produtos...
+                    </div>
+                </div>
+            </div>
+
+            <!-- ABA: Saldos em Reserva / Devolver -->
+            <div id="aba-devolver" class="tab-content hidden">
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5 mb-4">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Filtrar por estoque</label>
+                    <select id="select-estoque-filtro-saldos" onchange="carregarSaldos()" class="w-full md:w-72 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                        <option value="">Todos os estoques</option>
+                    </select>
+                </div>
+
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-3 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Estoque</th>
+                                    <th class="px-3 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Produto</th>
+                                    <th class="px-3 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Sabor</th>
+                                    <th class="px-3 py-3 text-center text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Saldo em reserva</th>
+                                    <th class="px-3 py-3 text-center text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Quantidade a devolver</th>
+                                    <th class="px-3 py-3 text-center text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Ação</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-devolver" class="bg-white divide-y divide-gray-200">
+                                <tr><td colspan="6" class="px-6 py-12 text-center text-gray-400"><i class="fas fa-spinner fa-spin text-2xl mb-2 block"></i> Carregando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ABA: Histórico -->
+            <div id="aba-historico" class="tab-content hidden">
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full divide-y divide-gray-200">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-3 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Data</th>
+                                    <th class="px-3 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Tipo</th>
+                                    <th class="px-3 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Produto</th>
+                                    <th class="px-3 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Sabor</th>
+                                    <th class="px-3 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Origem → Destino</th>
+                                    <th class="px-3 py-3 text-center text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Quantidade</th>
+                                    <th class="px-3 py-3 text-left text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Usuário</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tbody-historico" class="bg-white divide-y divide-gray-200">
+                                <tr><td colspan="7" class="px-6 py-12 text-center text-gray-400"><i class="fas fa-spinner fa-spin text-2xl mb-2 block"></i> Carregando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Modal: Novo Estoque -->
+    <div id="modal-novo-estoque" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+                <h2 class="text-xl font-bold text-gray-900">Novo Estoque</h2>
+                <button onclick="fecharModalNovoEstoque()" class="text-gray-400 hover:text-gray-600 transition">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Nome</label>
+                    <input id="novo-estoque-nome" type="text" placeholder="Ex: Depósito B"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Descrição (opcional)</label>
+                    <textarea id="novo-estoque-descricao" rows="2"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+            </div>
+            <div class="flex justify-end gap-3 px-6 py-4 border-t border-gray-200">
+                <button onclick="fecharModalNovoEstoque()" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium text-sm">Cancelar</button>
+                <button onclick="confirmarNovoEstoque()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm">Criar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="loading" class="hidden fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-xl shadow-xl text-center">
+            <div class="spinner mx-auto"></div>
+            <p class="mt-4 text-gray-700 font-medium">Processando...</p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../js/config.js"></script>
+    <script src="../js/session-manager.js"></script>
+    <script src="../js/utils.js"></script>
+    <script src="../js/auth.js"></script>
+    <script src="../js/services/estoque-reserva.js"></script>
+    <script src="../components/navbar.js"></script>
+    <script src="../components/sidebar.js"></script>
+
+    <script>
+        let estoques = [];
+        let catalogo = [];
+        let saldos = [];
+        const produtosExpandidosMover = new Set();
+
+        (async () => {
+            await checkAuth();
+            document.getElementById('navbar').innerHTML = createNavbar();
+            document.getElementById('sidebar-container').innerHTML = createSidebar();
+            await initNavbar();
+            await initSidebar();
+
+            const user = await getCurrentUser();
+            if (!user || user.role !== 'ADMIN') {
+                document.querySelector('main').innerHTML = `
+                    <div class="max-w-3xl mx-auto px-4 py-16 text-center">
+                        <i class="fas fa-lock text-4xl text-gray-300 mb-4"></i>
+                        <h2 class="text-xl font-semibold text-gray-700">Acesso restrito</h2>
+                        <p class="text-gray-500 mt-2">Somente administradores podem gerenciar o estoque reserva.</p>
+                    </div>`;
+                return;
+            }
+
+            await carregarEstoques();
+            await carregarCatalogo();
+            await carregarSaldos();
+            await carregarHistorico();
+        })();
+
+        // -------------------------------------------------------------
+        // Abas
+        // -------------------------------------------------------------
+        function mudarAba(nome) {
+            ['mover', 'devolver', 'historico'].forEach(aba => {
+                document.getElementById(`aba-${aba}`).classList.toggle('hidden', aba !== nome);
+                const btn = document.getElementById(`tab-btn-${aba}`);
+                btn.classList.toggle('border-blue-600', aba === nome);
+                btn.classList.toggle('text-blue-600', aba === nome);
+                btn.classList.toggle('border-transparent', aba !== nome);
+                btn.classList.toggle('text-gray-500', aba !== nome);
+            });
+        }
+
+        // -------------------------------------------------------------
+        // Estoques (lista + criação)
+        // -------------------------------------------------------------
+        async function carregarEstoques() {
+            estoques = await listEstoquesReserva();
+            renderizarListaEstoques();
+            renderizarSelectsEstoque();
+        }
+
+        function renderizarListaEstoques() {
+            const container = document.getElementById('lista-estoques');
+            if (estoques.length === 0) {
+                container.innerHTML = `<span class="text-gray-400 text-sm">Nenhum estoque cadastrado ainda. Clique em "Novo Estoque" para criar o primeiro.</span>`;
+                return;
+            }
+
+            container.innerHTML = estoques.map(e => `
+                <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm border ${e.ativo ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-gray-100 border-gray-200 text-gray-400'}">
+                    <i class="fas fa-warehouse"></i>
+                    ${escapeHtml(e.nome)}
+                    ${!e.ativo ? '<span class="text-xs">(inativo)</span>' : ''}
+                    <button onclick="alternarStatusEstoque('${e.id}', ${!e.ativo})" title="${e.ativo ? 'Desativar' : 'Reativar'}" class="ml-1 text-xs underline opacity-70 hover:opacity-100">
+                        ${e.ativo ? 'desativar' : 'reativar'}
+                    </button>
+                </span>
+            `).join('');
+        }
+
+        function renderizarSelectsEstoque() {
+            const ativos = estoques.filter(e => e.ativo);
+
+            const selDestino = document.getElementById('select-estoque-destino');
+            const valorAtualDestino = selDestino.value;
+            selDestino.innerHTML = '<option value="">Selecione...</option>' +
+                ativos.map(e => `<option value="${e.id}">${escapeHtml(e.nome)}</option>`).join('');
+            if (ativos.some(e => e.id === valorAtualDestino)) selDestino.value = valorAtualDestino;
+
+            const selFiltro = document.getElementById('select-estoque-filtro-saldos');
+            const valorAtualFiltro = selFiltro.value;
+            selFiltro.innerHTML = '<option value="">Todos os estoques</option>' +
+                estoques.map(e => `<option value="${e.id}">${escapeHtml(e.nome)}${!e.ativo ? ' (inativo)' : ''}</option>`).join('');
+            selFiltro.value = valorAtualFiltro;
+        }
+
+        function abrirModalNovoEstoque() {
+            document.getElementById('novo-estoque-nome').value = '';
+            document.getElementById('novo-estoque-descricao').value = '';
+            document.getElementById('modal-novo-estoque').classList.remove('hidden');
+        }
+
+        function fecharModalNovoEstoque() {
+            document.getElementById('modal-novo-estoque').classList.add('hidden');
+        }
+
+        async function confirmarNovoEstoque() {
+            const nome = document.getElementById('novo-estoque-nome').value.trim();
+            if (!nome) {
+                showToast('Informe um nome para o estoque', 'warning');
+                return;
+            }
+            const descricao = document.getElementById('novo-estoque-descricao').value.trim() || null;
+
+            showLoading(true);
+            try {
+                const resultado = await criarEstoqueReserva(nome, descricao);
+                showToast(resultado.mensagem, 'success');
+                fecharModalNovoEstoque();
+                await carregarEstoques();
+            } catch (error) {
+                handleError(error, 'Erro ao criar estoque');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function alternarStatusEstoque(estoqueId, novoStatus) {
+            const confirmado = await confirmAction(novoStatus ? 'Reativar este estoque?' : 'Desativar este estoque? Ele deixará de aparecer como destino para novas transferências (saldos existentes continuam podendo ser devolvidos normalmente).');
+            if (!confirmado) {
+                return;
+            }
+            showLoading(true);
+            try {
+                const resultado = await atualizarEstoqueReservaStatus(estoqueId, novoStatus);
+                showToast(resultado.mensagem, 'success');
+                await carregarEstoques();
+            } catch (error) {
+                handleError(error, 'Erro ao alterar estoque');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // -------------------------------------------------------------
+        // Aba: Mover para Reserva
+        // -------------------------------------------------------------
+        async function carregarCatalogo() {
+            catalogo = await listCatalogoParaMovimentacao();
+            renderizarTabelaMover();
+        }
+
+        function agruparPorProduto(itens) {
+            const grupos = new Map();
+            itens.forEach(item => {
+                if (!grupos.has(item.produtoId)) {
+                    grupos.set(item.produtoId, {
+                        produtoId: item.produtoId,
+                        produtoCodigo: item.produtoCodigo,
+                        produtoNome: item.produtoNome,
+                        unidade: item.unidade,
+                        itens: []
+                    });
+                }
+                grupos.get(item.produtoId).itens.push(item);
+            });
+            return Array.from(grupos.values()).sort((a, b) => a.produtoNome.localeCompare(b.produtoNome, 'pt-BR'));
+        }
+
+        function renderizarTabelaMover() {
+            const termo = document.getElementById('busca-mover').value.trim().toLowerCase();
+            const estoqueDestinoId = document.getElementById('select-estoque-destino').value;
+            const container = document.getElementById('lista-mover');
+            const buscaAtiva = termo.length > 0;
+
+            const itensFiltrados = catalogo.filter(item => {
+                if (!termo) return true;
+                return item.produtoNome.toLowerCase().includes(termo) ||
+                       item.produtoCodigo.toLowerCase().includes(termo) ||
+                       (item.saborNome || '').toLowerCase().includes(termo);
+            });
+
+            // Não dá pra saber sem reler todo campo se algo foi digitado, e isso
+            // seria caro de manter reativo a cada tecla. O botão fica habilitado
+            // sempre que houver destino escolhido e itens na lista; se nada tiver
+            // sido preenchido, o clique mostra um aviso em vez de mover algo.
+            document.getElementById('btn-mover-todos').disabled =
+                !estoqueDestinoId || itensFiltrados.length === 0;
+
+            if (itensFiltrados.length === 0) {
+                container.innerHTML = `<div class="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center text-gray-400">Nenhum produto encontrado</div>`;
+                return;
+            }
+
+            const grupos = agruparPorProduto(itensFiltrados);
+
+            const linhaItem = (item, comSaborLabel) => {
+                const chaveInput = `qtd-mover-${item.saborId || item.produtoId}`;
+                return `
+                    <div class="flex items-center justify-between gap-3 px-4 py-2.5 ${comSaborLabel ? 'border-t border-gray-100' : ''}">
+                        ${comSaborLabel
+                            ? `<span class="text-sm text-gray-700 truncate">${escapeHtml(item.saborNome)}</span>`
+                            : `<span class="font-semibold text-gray-900 truncate">${escapeHtml(item.produtoNome)} <span class="text-gray-400 text-xs font-normal">(${escapeHtml(item.produtoCodigo)})</span></span>`
+                        }
+                        <div class="flex items-center gap-3 flex-shrink-0">
+                            <span class="text-sm font-medium w-24 text-right">${formatarQtd(item.disponivel)} ${escapeHtml(item.unidade || '')}</span>
+                            <input type="number" id="${chaveInput}" min="0" step="0.01" max="${item.disponivel}"
+                                class="w-24 px-2 py-1.5 border border-gray-300 rounded-lg text-sm text-center focus:ring-2 focus:ring-blue-500"
+                                oninput="validarQuantidadeMover('${chaveInput}', ${item.disponivel})"
+                                placeholder="0">
+                            <button id="${chaveInput}-btn" onclick="executarMover('${item.produtoId}', ${item.saborId ? `'${item.saborId}'` : 'null'}, '${chaveInput}', ${item.disponivel})"
+                                disabled
+                                class="px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:bg-blue-700 transition whitespace-nowrap">
+                                <i class="fas fa-arrow-right"></i> Mover
+                            </button>
+                        </div>
+                    </div>
+                    <div id="${chaveInput}-hint" class="text-xs px-4 pb-1 text-right"></div>`;
+            };
+
+            container.innerHTML = grupos.map(grupo => {
+                // Produto com um único item (sem sabores, ou só 1 sabor cadastrado):
+                // uma linha só, sem cabeçalho/acordeão separado — não há o que agrupar.
+                if (grupo.itens.length === 1) {
+                    return `
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                        ${linhaItem(grupo.itens[0], false)}
+                    </div>`;
+                }
+
+                const expandido = buscaAtiva || produtosExpandidosMover.has(grupo.produtoId);
+                const totalDisponivel = grupo.itens.reduce((soma, i) => soma + i.disponivel, 0);
+                const temAlgumDisponivel = grupo.itens.some(i => i.disponivel > 0);
+
+                const cabecalho = `
+                    <div class="flex items-center justify-between px-4 py-3 bg-gray-50 cursor-pointer" onclick="toggleProdutoMover('${grupo.produtoId}')">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <i class="fas fa-chevron-${expandido ? 'down' : 'right'} text-gray-400 text-xs flex-shrink-0"></i>
+                            <span class="font-semibold text-gray-900 truncate">${escapeHtml(grupo.produtoNome)}</span>
+                            <span class="text-gray-400 text-xs flex-shrink-0">(${escapeHtml(grupo.produtoCodigo)})</span>
+                            <span class="text-xs text-gray-500 flex-shrink-0">• ${grupo.itens.length} sabores • ${formatarQtd(totalDisponivel)} ${escapeHtml(grupo.unidade || '')} disponíveis</span>
+                        </div>
+                        <button onclick="event.stopPropagation(); moverTudoProduto('${grupo.produtoId}')" ${!temAlgumDisponivel ? 'disabled' : ''}
+                            title="Move os sabores deste produto que tiverem quantidade preenchida ao lado"
+                            class="px-3 py-1.5 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-200 disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0 ml-2">
+                            <i class="fas fa-layer-group"></i> Mover preenchidos
+                        </button>
+                    </div>`;
+
+                const linhas = grupo.itens.map(item => linhaItem(item, true)).join('');
+
+                return `
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                    ${cabecalho}
+                    ${expandido ? linhas : ''}
+                </div>`;
+            }).join('');
+        }
+
+        function toggleProdutoMover(produtoId) {
+            if (produtosExpandidosMover.has(produtoId)) {
+                produtosExpandidosMover.delete(produtoId);
+            } else {
+                produtosExpandidosMover.add(produtoId);
+            }
+            renderizarTabelaMover();
+        }
+
+        function validarQuantidadeMover(inputId, disponivel) {
+            const input = document.getElementById(inputId);
+            const hint = document.getElementById(`${inputId}-hint`);
+            const btn = document.getElementById(`${inputId}-btn`);
+            const valor = parseFloat(input.value);
+
+            if (!input.value || isNaN(valor) || valor <= 0) {
+                hint.textContent = '';
+                btn.disabled = true;
+                return;
+            }
+            if (valor > disponivel) {
+                hint.innerHTML = `<span class="text-red-600"><i class="fas fa-triangle-exclamation"></i> Maior que o disponível (${formatarQtd(disponivel)})</span>`;
+                btn.disabled = true;
+                return;
+            }
+            hint.innerHTML = `<span class="text-green-600"><i class="fas fa-check"></i> OK</span>`;
+            btn.disabled = false;
+        }
+
+        async function executarMover(produtoId, saborId, inputId, disponivel) {
+            const estoqueDestinoId = document.getElementById('select-estoque-destino').value;
+            if (!estoqueDestinoId) {
+                showToast('Selecione o estoque de destino', 'warning');
+                return;
+            }
+
+            const input = document.getElementById(inputId);
+            const quantidade = parseFloat(input.value);
+            if (!quantidade || quantidade <= 0 || quantidade > disponivel) {
+                showToast('Quantidade inválida', 'warning');
+                return;
+            }
+
+            showLoading(true);
+            try {
+                const resultado = await moverEstoqueParaReserva({
+                    produtoId,
+                    saborId,
+                    estoqueDestinoId,
+                    quantidade
+                });
+                showToast(resultado.mensagem, 'success');
+                await Promise.all([carregarCatalogo(), carregarSaldos()]);
+            } catch (error) {
+                handleError(error, 'Erro ao mover estoque');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Move, em sequência (uma chamada de cada vez, para poder relatar o que
+        // falhou item a item), somente os itens da lista onde uma quantidade foi
+        // DIGITADA no campo daquela linha (ignora vazio/0 — esses não fazem parte
+        // da operação). Usada tanto por "Mover preenchidos" (no cabeçalho do
+        // produto) quanto por "Mover Preenchidos" (no topo da tela): a diferença
+        // entre os dois é só o ESCOPO de itens considerado, a quantidade sempre
+        // vem do que está digitado no campo de cada linha.
+        async function moverVariosParaReserva(itens, tituloConfirmacao) {
+            const estoqueDestinoId = document.getElementById('select-estoque-destino').value;
+            if (!estoqueDestinoId) {
+                showToast('Selecione o estoque de destino', 'warning');
+                return;
+            }
+
+            const nomeDestino = estoques.find(e => e.id === estoqueDestinoId)?.nome || 'destino selecionado';
+
+            const itensComQuantidade = [];
+            const falhasValidacao = [];
+
+            itens.forEach(item => {
+                const chaveInput = `qtd-mover-${item.saborId || item.produtoId}`;
+                const input = document.getElementById(chaveInput);
+                const quantidade = input ? parseFloat(input.value) : NaN;
+
+                if (isNaN(quantidade) || quantidade <= 0) return; // não preenchido, não faz parte da operação
+
+                if (quantidade > item.disponivel) {
+                    falhasValidacao.push(`${item.produtoNome}${item.saborNome ? ' / ' + item.saborNome : ''}: quantidade digitada (${formatarQtd(quantidade)}) maior que o disponível (${formatarQtd(item.disponivel)})`);
+                    return;
+                }
+
+                itensComQuantidade.push({ item, quantidade });
+            });
+
+            if (itensComQuantidade.length === 0 && falhasValidacao.length === 0) {
+                showToast('Nenhuma quantidade foi informada. Digite a quantidade a mover em cada item desejado.', 'warning');
+                return;
+            }
+
+            if (itensComQuantidade.length === 0) {
+                console.warn('Falhas de validação ao mover em lote:', falhasValidacao);
+                showToast(`Nenhum item válido: ${falhasValidacao.length} com quantidade maior que o disponível (veja o console)`, 'error');
+                return;
+            }
+
+            const totalUnidades = itensComQuantidade.reduce((soma, { quantidade }) => soma + quantidade, 0);
+            const confirmado = await confirmAction(
+                `${tituloConfirmacao}\n\n${itensComQuantidade.length} item(ns) com quantidade preenchida, totalizando ${formatarQtd(totalUnidades)} unidade(s), será(ão) movido(s) para "${nomeDestino}".\n\nConfirma?`
+            );
+            if (!confirmado) return;
+
+            showLoading(true);
+            let sucessos = 0;
+            const falhas = [...falhasValidacao];
+
+            try {
+                for (const { item, quantidade } of itensComQuantidade) {
+                    try {
+                        await moverEstoqueParaReserva({
+                            produtoId: item.produtoId,
+                            saborId: item.saborId,
+                            estoqueDestinoId,
+                            quantidade
+                        });
+                        sucessos++;
+                    } catch (error) {
+                        falhas.push(`${item.produtoNome}${item.saborNome ? ' / ' + item.saborNome : ''}: ${error.message}`);
+                    }
+                }
+
+                if (falhas.length === 0) {
+                    showToast(`${sucessos} item(ns) movido(s) com sucesso para "${nomeDestino}"`, 'success');
+                } else {
+                    console.warn('Falhas ao mover em lote:', falhas);
+                    showToast(`${sucessos} movido(s), ${falhas.length} falharam (veja o console para detalhes)`, 'warning');
+                }
+
+                await Promise.all([carregarCatalogo(), carregarSaldos()]);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function moverTudoProduto(produtoId) {
+            const itens = catalogo.filter(i => i.produtoId === produtoId);
+            const nomeProduto = itens[0]?.produtoNome || 'produto';
+            moverVariosParaReserva(itens, `Mover os itens preenchidos de "${nomeProduto}"?`);
+        }
+
+        function moverTodosFiltrados() {
+            const termo = document.getElementById('busca-mover').value.trim().toLowerCase();
+            const itens = catalogo.filter(item => {
+                if (!termo) return true;
+                return item.produtoNome.toLowerCase().includes(termo) ||
+                       item.produtoCodigo.toLowerCase().includes(termo) ||
+                       (item.saborNome || '').toLowerCase().includes(termo);
+            });
+            moverVariosParaReserva(itens, termo ? `Mover os itens preenchidos filtrados por "${termo}"?` : 'Mover os itens preenchidos de toda a lista?');
+        }
+
+        // -------------------------------------------------------------
+        // Aba: Saldos em Reserva / Devolver
+        // -------------------------------------------------------------
+        async function carregarSaldos() {
+            const estoqueId = document.getElementById('select-estoque-filtro-saldos').value || null;
+            saldos = await listSaldosReserva(estoqueId);
+            renderizarTabelaDevolver();
+        }
+
+        function renderizarTabelaDevolver() {
+            const tbody = document.getElementById('tbody-devolver');
+
+            if (saldos.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="px-6 py-12 text-center text-gray-400">Nenhum saldo em estoque reserva</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = saldos.map(s => {
+                const chaveInput = `qtd-devolver-${s.id}`;
+                return `
+                <tr>
+                    <td class="px-3 py-3 text-sm text-gray-900">${escapeHtml(s.estoque_nome)}</td>
+                    <td class="px-3 py-3 text-sm text-gray-900">${escapeHtml(s.produto_nome)} <span class="text-gray-400 text-xs">(${escapeHtml(s.produto_codigo)})</span></td>
+                    <td class="px-3 py-3 text-sm text-gray-600">${s.sabor_nome ? escapeHtml(s.sabor_nome) : '<span class="text-gray-400">—</span>'}</td>
+                    <td class="px-3 py-3 text-sm text-center font-medium">${formatarQtd(s.quantidade)} ${escapeHtml(s.produto_unidade || '')}</td>
+                    <td class="px-3 py-3 text-center">
+                        <input type="number" id="${chaveInput}" min="0" step="0.01" max="${s.quantidade}"
+                            class="w-28 px-2 py-1.5 border border-gray-300 rounded-lg text-sm text-center focus:ring-2 focus:ring-blue-500"
+                            oninput="validarQuantidadeMover('${chaveInput}', ${s.quantidade})"
+                            placeholder="0">
+                        <div id="${chaveInput}-hint" class="text-xs mt-1"></div>
+                    </td>
+                    <td class="px-3 py-3 text-center">
+                        <button id="${chaveInput}-btn" onclick="executarDevolver('${s.produto_id}', ${s.sabor_id ? `'${s.sabor_id}'` : 'null'}, '${s.estoque_id}', '${chaveInput}', ${s.quantidade})"
+                            disabled
+                            class="px-3 py-1.5 bg-green-600 text-white rounded-lg text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:bg-green-700 transition">
+                            <i class="fas fa-arrow-left"></i> Devolver
+                        </button>
+                    </td>
+                </tr>
+            `;
+            }).join('');
+        }
+
+        async function executarDevolver(produtoId, saborId, estoqueOrigemId, inputId, disponivel) {
+            const input = document.getElementById(inputId);
+            const quantidade = parseFloat(input.value);
+            if (!quantidade || quantidade <= 0 || quantidade > disponivel) {
+                showToast('Quantidade inválida', 'warning');
+                return;
+            }
+
+            showLoading(true);
+            try {
+                const resultado = await retornarEstoqueReserva({
+                    produtoId,
+                    saborId,
+                    estoqueOrigemId,
+                    quantidade
+                });
+                showToast(resultado.mensagem, 'success');
+                await Promise.all([carregarCatalogo(), carregarSaldos(), carregarHistorico()]);
+            } catch (error) {
+                handleError(error, 'Erro ao devolver estoque');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // -------------------------------------------------------------
+        // Aba: Histórico
+        // -------------------------------------------------------------
+        async function carregarHistorico() {
+            const historico = await listTransferenciasReserva({ limit: 200 });
+            const tbody = document.getElementById('tbody-historico');
+
+            if (historico.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="px-6 py-12 text-center text-gray-400">Nenhuma transferência registrada ainda</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = historico.map(t => {
+                const isEnvio = t.tipo === 'ENVIO';
+                const origem = t.estoque_origem_nome || 'Principal';
+                const destino = t.estoque_destino_nome || 'Principal';
+                return `
+                <tr>
+                    <td class="px-3 py-3 text-sm text-gray-600 whitespace-nowrap">${formatarData(t.created_at)}</td>
+                    <td class="px-3 py-3">
+                        <span class="px-2 py-1 rounded-full text-xs font-medium ${isEnvio ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}">
+                            ${isEnvio ? 'Envio' : 'Retorno'}
+                        </span>
+                    </td>
+                    <td class="px-3 py-3 text-sm text-gray-900">${escapeHtml(t.produto_nome)} <span class="text-gray-400 text-xs">(${escapeHtml(t.produto_codigo)})</span></td>
+                    <td class="px-3 py-3 text-sm text-gray-600">${t.sabor_nome ? escapeHtml(t.sabor_nome) : '<span class="text-gray-400">—</span>'}</td>
+                    <td class="px-3 py-3 text-sm text-gray-600">${escapeHtml(origem)} <i class="fas fa-arrow-right text-gray-300 mx-1"></i> ${escapeHtml(destino)}</td>
+                    <td class="px-3 py-3 text-sm text-center font-medium">${formatarQtd(t.quantidade)}</td>
+                    <td class="px-3 py-3 text-sm text-gray-600">${escapeHtml(t.usuario_nome || '—')}</td>
+                </tr>
+            `;
+            }).join('');
+        }
+
+        // -------------------------------------------------------------
+        // Utilitários locais de formatação/segurança
+        // -------------------------------------------------------------
+        function formatarQtd(valor) {
+            const n = Number(valor) || 0;
+            return n.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+        }
+
+        function formatarData(iso) {
+            if (!iso) return '—';
+            return new Date(iso).toLocaleString('pt-BR');
+        }
+
+        function escapeHtml(texto) {
+            const div = document.createElement('div');
+            div.textContent = texto ?? '';
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
