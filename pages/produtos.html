@@ -177,8 +177,8 @@
                 <button type="button" onclick="closeModal('modal-lista-produto')" aria-label="Fechar lista" class="text-gray-500 hover:text-gray-700"><i class="fas fa-times"></i></button>
             </div>
             <div class="px-6 py-4">
-                <p class="text-sm text-gray-600 mb-3">Sabores com estoque disponível. Copie e cole a lista na sua mensagem.</p>
-                <textarea id="lista-produto-texto" readonly aria-label="Lista para copiar" class="w-full rounded-lg p-4 text-white text-sm leading-6 resize-y" style="background-color: #005440; min-height: 320px; font-family: Arial, sans-serif;"></textarea>
+                <p class="text-sm text-gray-600 mb-3">Sabores com estoque disponível. Você pode editar o texto antes de copiar e colar na sua mensagem.</p>
+                <div id="lista-produto-texto" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Lista para copiar (editável)" class="w-full rounded-lg p-4 text-white text-sm leading-6" style="background-color: #005440; min-height: 320px; max-height: 60vh; overflow-y: auto; resize: vertical; font-family: Arial, sans-serif; white-space: pre-wrap; outline: none;"></div>
                 <div class="flex justify-end gap-3 mt-4">
                     <button type="button" onclick="closeModal('modal-lista-produto')" class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">Fechar</button>
                     <button type="button" onclick="copiarListaProduto()" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"><i class="fas fa-copy mr-2"></i>Copiar lista</button>
@@ -474,16 +474,48 @@
                 }).join('');
         }
 
-        function gerarTextoListaProduto(produto, sabores) {
+        function escaparHtml(texto) {
+            const div = document.createElement('div');
+            div.textContent = texto;
+            return div.innerHTML;
+        }
+
+        function gerarHtmlListaProduto(produto, sabores) {
             const disponiveis = sabores
                 .filter(s => s.ativo === true && Number(s.quantidade) > 0)
                 .sort((a, b) => a.sabor.localeCompare(b.sabor, 'pt-BR'));
             const formatarQuantidade = quantidade => Number.isInteger(quantidade)
                 ? String(quantidade).padStart(2, '0')
                 : quantidade.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
-            const linhas = disponiveis.map(s => `▪️ ${formatarQuantidade(Number(s.quantidade))} ${s.sabor.toUpperCase()}`);
+            const linhas = disponiveis.map(s => escaparHtml(`▪️ ${formatarQuantidade(Number(s.quantidade))} ${s.sabor.toUpperCase()}`));
             const total = Math.round(disponiveis.reduce((soma, s) => soma + Number(s.quantidade), 0) * 100) / 100;
-            return [`☁️🔥 ${produto.nome.toUpperCase()}`, '🔥☁️', '', ...linhas, '', `📦 TOTAL: ${formatarQuantidade(total)} PEÇAS`].join('\n');
+            const linhaNome = `✅ <b>${escaparHtml(produto.nome.toUpperCase())}</b>`;
+            return [linhaNome, '', ...linhas, '', escaparHtml(`📦 TOTAL: ${formatarQuantidade(total)} PEÇAS`)].join('<br>');
+        }
+
+        function extrairTextoFormatado(no) {
+            if (no.nodeType === Node.TEXT_NODE) {
+                return no.textContent;
+            }
+            if (no.nodeType !== Node.ELEMENT_NODE) {
+                return '';
+            }
+            const tag = no.tagName;
+            if (tag === 'BR') {
+                return '\n';
+            }
+            const conteudo = Array.from(no.childNodes).map(extrairTextoFormatado).join('');
+            const estiloNegrito = tag === 'B' || tag === 'STRONG'
+                || Number(window.getComputedStyle(no).fontWeight) >= 600;
+            const textoComNegrito = estiloNegrito && conteudo.trim() ? `*${conteudo}*` : conteudo;
+            const ehBloco = ['DIV', 'P'].includes(tag);
+            return ehBloco ? `${textoComNegrito}\n` : textoComNegrito;
+        }
+
+        function obterTextoListaProduto() {
+            const campo = document.getElementById('lista-produto-texto');
+            const texto = Array.from(campo.childNodes).map(extrairTextoFormatado).join('');
+            return texto.replace(/\n+$/, '');
         }
 
         async function abrirListaProduto(produtoId) {
@@ -499,7 +531,7 @@
                     .order('sabor');
                 if (error) throw error;
                 document.getElementById('lista-produto-titulo').textContent = 'Lista de produto e sabores';
-                document.getElementById('lista-produto-texto').value = gerarTextoListaProduto(produto, sabores || []);
+                document.getElementById('lista-produto-texto').innerHTML = gerarHtmlListaProduto(produto, sabores || []);
                 openModal('modal-lista-produto');
             } catch (error) {
                 handleError(error, 'Erro ao gerar lista do produto');
@@ -537,9 +569,9 @@
                 const listas = [...grupos.values()]
                     .sort((a, b) => (a.produto.marca || '').localeCompare(b.produto.marca || '', 'pt-BR')
                         || a.produto.nome.localeCompare(b.produto.nome, 'pt-BR'))
-                    .map(grupo => gerarTextoListaProduto(grupo.produto, grupo.sabores));
+                    .map(grupo => gerarHtmlListaProduto(grupo.produto, grupo.sabores));
                 document.getElementById('lista-produto-titulo').textContent = 'Lista de todos os produtos e sabores';
-                document.getElementById('lista-produto-texto').value = listas.join('\n\n\n');
+                document.getElementById('lista-produto-texto').innerHTML = listas.join('<br><br>');
                 openModal('modal-lista-produto');
             } catch (error) {
                 handleError(error, 'Erro ao gerar lista de todos os produtos');
@@ -550,19 +582,23 @@
 
         async function copiarListaProduto() {
             const campo = document.getElementById('lista-produto-texto');
+            const texto = obterTextoListaProduto();
             try {
                 if (!navigator.clipboard?.writeText) throw new Error('Copiar manualmente');
-                await navigator.clipboard.writeText(campo.value);
+                await navigator.clipboard.writeText(texto);
                 showToast('Lista copiada! Cole na sua mensagem.', 'success');
             } catch {
-                campo.focus();
-                campo.select();
-                campo.setSelectionRange(0, campo.value.length);
+                const range = document.createRange();
+                range.selectNodeContents(campo);
+                const selecao = window.getSelection();
+                selecao.removeAllRanges();
+                selecao.addRange(range);
                 if (document.execCommand('copy')) {
                     showToast('Lista copiada! Cole na sua mensagem.', 'success');
                 } else {
                     showToast('Selecionei a lista. Use Ctrl+C ou a opção Copiar do celular.', 'info');
                 }
+                selecao.removeAllRanges();
             }
         }
 
