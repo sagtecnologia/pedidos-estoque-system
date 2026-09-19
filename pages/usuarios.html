@@ -37,13 +37,14 @@
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nome</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Perfil</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Comissão</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">WhatsApp</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                             <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ações</th>
                         </tr>
                     </thead>
                     <tbody id="usuarios-tbody" class="bg-white divide-y divide-gray-200">
-                        <tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">Carregando...</td></tr>
+                        <tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">Carregando...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -86,11 +87,31 @@
                         <label class="block text-sm font-medium text-gray-700 mb-2">WhatsApp</label>
                         <input type="text" id="novo-usuario-whatsapp" placeholder="+55 (11) 99999-9999" class="w-full px-4 py-2 border border-gray-300 rounded-lg">
                     </div>
+
+                    <div class="border border-amber-200 bg-amber-50 rounded-lg p-4 space-y-3">
+                        <p class="text-sm font-semibold text-amber-900">
+                            <i class="fas fa-percentage mr-1"></i> Comissão sobre a venda
+                        </p>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Tipo de comissão</label>
+                            <select id="novo-usuario-comissao-tipo" class="w-full px-4 py-2 border border-gray-300 rounded-lg">
+                                <option value="PERCENTUAL">Percentual (%) sobre a venda</option>
+                                <option value="UNIDADE">Valor (R$) por unidade vendida</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Valor da comissão</label>
+                            <input type="number" id="novo-usuario-comissao-valor" value="0" min="0" step="0.01" class="w-full px-4 py-2 border border-gray-300 rounded-lg">
+                            <p id="novo-usuario-comissao-ajuda" class="text-xs text-gray-600 mt-1"></p>
+                        </div>
+                    </div>
                     <div class="flex items-center">
                         <input type="checkbox" id="novo-usuario-ativo" checked class="mr-2">
                         <label for="novo-usuario-ativo" class="text-sm text-gray-700">Ativar usuário no sistema</label>
                     </div>
-                    <p class="text-xs text-gray-500">Se a confirmação de email estiver habilitada no Supabase, o usuário ainda precisará confirmar o email antes do primeiro login.</p>
+                    <p class="text-xs text-green-700 bg-green-50 border border-green-200 rounded p-2">
+                        <i class="fas fa-circle-check mr-1"></i> O usuário é criado já liberado: entra com email e senha, sem precisar confirmar email.
+                    </p>
                 </div>
                 <div class="flex justify-end space-x-3 mt-6">
                     <button type="button" onclick="closeModal('modal-novo-usuario')" class="px-4 py-2 text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300">Cancelar</button>
@@ -129,6 +150,27 @@
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">WhatsApp</label>
                         <input type="text" id="usuario-whatsapp" placeholder="+55 (11) 99999-9999" class="w-full px-4 py-2 border border-gray-300 rounded-lg">
+                    </div>
+
+                    <div class="border border-amber-200 bg-amber-50 rounded-lg p-4 space-y-3">
+                        <p class="text-sm font-semibold text-amber-900">
+                            <i class="fas fa-percentage mr-1"></i> Comissão sobre a venda
+                        </p>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Tipo de comissão</label>
+                            <select id="usuario-comissao-tipo" class="w-full px-4 py-2 border border-gray-300 rounded-lg">
+                                <option value="PERCENTUAL">Percentual (%) sobre a venda</option>
+                                <option value="UNIDADE">Valor (R$) por unidade vendida</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Valor da comissão</label>
+                            <input type="number" id="usuario-comissao-valor" min="0" step="0.01" class="w-full px-4 py-2 border border-gray-300 rounded-lg">
+                            <p id="usuario-comissao-ajuda" class="text-xs text-gray-600 mt-1"></p>
+                        </div>
+                        <p class="text-xs text-amber-800">
+                            A comissão já congelada em vendas finalizadas não muda. O novo valor vale para as próximas vendas.
+                        </p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">Nova Senha</label>
@@ -184,14 +226,59 @@
             // Aplicar máscaras
             applyMask('novo-usuario-whatsapp', 'whatsapp');
             applyMask('usuario-whatsapp', 'whatsapp');
+
+            // Texto de ajuda muda junto com o tipo de comissão escolhido
+            vincularAjudaComissao('novo-usuario');
+            vincularAjudaComissao('usuario');
         })();
+
+        // O rótulo do campo de valor depende do tipo: "%" ou "R$ por unidade".
+        function vincularAjudaComissao(prefixo) {
+            const tipo = document.getElementById(`${prefixo}-comissao-tipo`);
+            const valor = document.getElementById(`${prefixo}-comissao-valor`);
+            const ajuda = document.getElementById(`${prefixo}-comissao-ajuda`);
+            if (!tipo || !valor || !ajuda) return;
+
+            const atualizar = () => {
+                if (tipo.value === 'PERCENTUAL') {
+                    valor.max = 100;
+                    valor.placeholder = 'Ex.: 5 para 5%';
+                    ajuda.textContent = `Comissão de ${Number(valor.value || 0)}% sobre o valor de cada venda. Zero = sem comissão.`;
+                } else {
+                    valor.removeAttribute('max');
+                    valor.placeholder = 'Ex.: 0,50 por unidade';
+                    ajuda.textContent = `Comissão de ${formatCurrency(Number(valor.value || 0))} por unidade vendida. Zero = sem comissão.`;
+                }
+            };
+
+            tipo.addEventListener('change', atualizar);
+            valor.addEventListener('input', atualizar);
+            atualizar();
+        }
+
+        // Lê e valida os campos de comissão. Devolve null quando inválido.
+        function lerComissao(prefixo) {
+            const tipo = document.getElementById(`${prefixo}-comissao-tipo`).value;
+            const valor = Number(document.getElementById(`${prefixo}-comissao-valor`).value || 0);
+
+            if (!Number.isFinite(valor) || valor < 0) {
+                showToast('O valor da comissão não pode ser negativo.', 'error');
+                return null;
+            }
+            if (tipo === 'PERCENTUAL' && valor > 100) {
+                showToast('A comissão percentual não pode passar de 100%.', 'error');
+                return null;
+            }
+
+            return { comissao_tipo: tipo, comissao_valor: valor };
+        }
 
         async function loadUsuarios() {
             const usuarios = await listUsuarios({});
             const tbody = document.getElementById('usuarios-tbody');
             
             if (usuarios.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="px-6 py-4 text-center text-gray-500">Nenhum usuário encontrado</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="px-6 py-4 text-center text-gray-500">Nenhum usuário encontrado</td></tr>';
                 return;
             }
 
@@ -208,6 +295,7 @@
                     <td class="px-6 py-4 text-sm text-gray-900">${u.full_name}</td>
                     <td class="px-6 py-4 text-sm text-gray-600">${u.email}</td>
                     <td class="px-6 py-4 text-sm"><span class="px-2 py-1 text-xs rounded-full ${roleBadgeClasses[u.role] || 'bg-gray-100 text-gray-800'}">${getRoleLabel(u.role)}</span></td>
+                    <td class="px-6 py-4 text-sm ${Number(u.comissao_valor) > 0 ? 'text-amber-700 font-medium' : 'text-gray-400'}">${descreverComissao(u.comissao_tipo, u.comissao_valor)}</td>
                     <td class="px-6 py-4 text-sm text-gray-600">${u.whatsapp || '-'}</td>
                     <td class="px-6 py-4 text-sm">
                         <span class="px-2 py-1 text-xs rounded-full ${u.active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
@@ -239,53 +327,30 @@
                 const whatsapp = document.getElementById('novo-usuario-whatsapp').value || null;
                 const ativo = document.getElementById('novo-usuario-ativo').checked;
 
-                // 1. Criar usuário no Supabase Auth
-                const supabaseCadastro = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-                    auth: {
-                        autoRefreshToken: false,
-                        persistSession: false,
-                        detectSessionInUrl: false,
-                        storageKey: `cadastro-usuario-${Date.now()}`
-                    }
+                const comissao = lerComissao('novo-usuario');
+                if (!comissao) return;
+
+                // Cadastro via RPC admin_criar_usuario: cria o usuário no Auth
+                // com o email JÁ confirmado e grava o perfil em public.users na
+                // mesma transação. Antes isso era feito com auth.signUp(), que
+                // respeita o "Confirm email" do projeto e deixava o usuário
+                // travado esperando um email que nunca seria aberto — os emails
+                // aqui são só credencial de login, não caixa de entrada real.
+                const { data: novoId, error: rpcError } = await supabase.rpc('admin_criar_usuario', {
+                    p_email: email,
+                    p_senha: senha,
+                    p_nome: nome,
+                    p_role: role,
+                    p_whatsapp: whatsapp,
+                    p_ativo: ativo,
+                    p_comissao_tipo: comissao.comissao_tipo,
+                    p_comissao_valor: comissao.comissao_valor
                 });
 
-                const { data: authData, error: authError } = await supabaseCadastro.auth.signUp({
-                    email: email,
-                    password: senha,
-                    options: {
-                        data: {
-                            full_name: nome,
-                            role: role
-                        }
-                    }
-                });
+                if (rpcError) throw rpcError;
+                if (!novoId) throw new Error('Não foi possível criar o usuário.');
 
-                if (authError) throw authError;
-                if (!authData?.user?.id) throw new Error('NÃ£o foi possÃ­vel criar o usuÃ¡rio no Auth.');
-
-                await supabaseCadastro.auth.signOut();
-
-                // 2. Criar registro na tabela users
-                const { error: userError } = await supabase
-                    .from('users')
-                    .insert([{
-                        id: authData.user.id,
-                        email: email,
-                        full_name: nome,
-                        role: role,
-                        whatsapp: whatsapp,
-                        active: ativo
-                    }]);
-
-                if (userError) throw userError;
-
-                const precisaConfirmarEmail = !authData.user.email_confirmed_at;
-                showToast(
-                    precisaConfirmarEmail
-                        ? 'Usuario cadastrado com sucesso! Ele ainda precisa confirmar o email antes de fazer login.'
-                        : 'Usuario cadastrado com sucesso!',
-                    'success'
-                );
+                showToast('Usuário cadastrado! Já pode fazer login com email e senha, sem confirmação.', 'success');
                 closeModal('modal-novo-usuario');
                 document.getElementById('form-novo-usuario').reset();
                 await loadUsuarios();
@@ -316,10 +381,14 @@
                 }
             }
 
+            const comissao = lerComissao('usuario');
+            if (!comissao) return;
+
             const usuario = {
                 full_name: document.getElementById('usuario-nome').value,
                 role: document.getElementById('usuario-role').value,
-                whatsapp: document.getElementById('usuario-whatsapp').value || null
+                whatsapp: document.getElementById('usuario-whatsapp').value || null,
+                ...comissao
             };
 
             const atualizado = await updateUsuario(editingId, usuario, novaSenha || null);
@@ -337,6 +406,9 @@
             document.getElementById('usuario-nome').value = usuario.full_name || '';
             document.getElementById('usuario-role').value = usuario.role;
             document.getElementById('usuario-whatsapp').value = usuario.whatsapp || '';
+            document.getElementById('usuario-comissao-tipo').value = usuario.comissao_tipo || 'PERCENTUAL';
+            document.getElementById('usuario-comissao-valor').value = Number(usuario.comissao_valor || 0);
+            document.getElementById('usuario-comissao-tipo').dispatchEvent(new Event('change'));
             document.getElementById('usuario-senha').value = '';
             document.getElementById('usuario-confirmar-senha').value = '';
             openModal('modal-usuario');

@@ -76,6 +76,58 @@ function formatCurrency(value) {
     }).format(value);
 }
 
+// =====================================================
+// COMISSAO DE VENDEDOR
+// =====================================================
+// Espelho exato de public.calcular_comissao() (database/sql_comissao_vendedor.sql).
+// Qualquer mudanca de regra precisa ser feita nos dois lugares.
+
+const COMISSAO_TIPO_LABELS = Object.freeze({
+    'PERCENTUAL': 'Percentual sobre a venda',
+    'UNIDADE': 'Valor por unidade vendida'
+});
+
+// Comissao total de uma venda. PERCENTUAL incide sobre o valor da venda;
+// UNIDADE multiplica a quantidade vendida.
+function calcularComissao(tipo, valor, totalVenda, quantidade) {
+    const taxa = Number(valor);
+    if (!tipo || !Number.isFinite(taxa) || taxa <= 0) return 0;
+
+    if (tipo === 'PERCENTUAL') {
+        return (Number(totalVenda) || 0) * taxa / 100;
+    }
+    if (tipo === 'UNIDADE') {
+        return (Number(quantidade) || 0) * taxa;
+    }
+    return 0;
+}
+
+// Parcela da comissao que cabe a um item da venda.
+// O rateio e exato nos dois tipos (o percentual incide sobre a receita do
+// item; o valor por unidade sobre a quantidade do item), entao somar os itens
+// de uma venda devolve a comissao da venda. E isso que permite a analise
+// financeira filtrar por marca/produto/sabor sem distorcer a comissao.
+function calcularComissaoItem(tipo, valor, item) {
+    if (!item) return 0;
+    const quantidade = Number(item.quantidade) || 0;
+    const receitaItem = (Number(item.preco_unitario) || 0) * quantidade;
+    return calcularComissao(tipo, valor, receitaItem, quantidade);
+}
+
+// Texto curto da regra, para exibir ao lado do valor. Ex.: "5% sobre a venda".
+function descreverComissao(tipo, valor) {
+    const taxa = Number(valor);
+    if (!tipo || !Number.isFinite(taxa) || taxa <= 0) return 'Sem comissao configurada';
+
+    if (tipo === 'PERCENTUAL') {
+        return `${taxa.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}% sobre a venda`;
+    }
+    if (tipo === 'UNIDADE') {
+        return `${formatCurrency(taxa)} por unidade`;
+    }
+    return 'Sem comissao configurada';
+}
+
 const ROLE_LABELS = Object.freeze({
     'ADMIN': 'Administrador',
     'COMPRADOR': 'Comprador',

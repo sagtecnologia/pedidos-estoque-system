@@ -153,9 +153,28 @@
     height: 100%;
     background: rgba(0, 0, 0, 0.5);
     display: flex;
-    align-items: center;
     justify-content: center;
     z-index: 1000;
+
+    /* Modal mais alto que a tela precisa rolar. Com align-items:center o
+       conteudo que passa da altura da janela fica cortado em CIMA e EMBAIXO,
+       e o scroll nao alcanca. A combinacao abaixo resolve os dois casos:
+       modal baixo continua centralizado (pelo margin:auto do filho) e modal
+       alto rola normalmente. */
+    overflow-y: auto;
+    padding: 1rem 0;
+    overscroll-behavior: contain;
+}
+
+/* Filho direto = a "caixa" do modal. O margin:auto e o que centraliza
+   verticalmente sem usar align-items, preservando o scroll. */
+.modal-backdrop > * {
+    margin-top: auto;
+    margin-bottom: auto;
+}
+
+.modal-backdrop.hidden {
+    display: none;
 }
 
 /* Sidebar */

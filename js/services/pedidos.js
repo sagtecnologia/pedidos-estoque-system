@@ -61,7 +61,7 @@ async function getPedido(id) {
             .from('pedidos')
             .select(`
                 *,
-                solicitante:users!pedidos_solicitante_id_fkey(id, full_name, email),
+                solicitante:users!pedidos_solicitante_id_fkey(id, full_name, email, comissao_tipo, comissao_valor),
                 fornecedor:fornecedores(id, nome, cnpj, whatsapp),
                 cliente:clientes(id, nome, cpf_cnpj, whatsapp),
                 aprovador:users!pedidos_aprovador_id_fkey(id, full_name, email, whatsapp)

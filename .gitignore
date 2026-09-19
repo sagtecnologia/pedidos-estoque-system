@@ -29,3 +29,7 @@ build/
 # Temporary files
 tmp/
 temp/
+
+# Supabase CLI
+supabase/.temp/
+supabase/.branches/
