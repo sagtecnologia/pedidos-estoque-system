@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conferência de Estoque - Sistema de Compras</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="../css/styles.css">
+</head>
+<body class="bg-gray-100">
+    <div id="navbar"></div>
+    <div id="sidebar-container"></div>
+
+    <main class="lg:ml-64 pt-16 pb-24">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+            <div class="mb-6">
+                <h2 class="text-3xl font-bold text-gray-900 flex items-center gap-3">
+                    <i class="fas fa-clipboard-check text-blue-600"></i>
+                    Conferência de Estoque
+                </h2>
+                <p class="text-gray-500 mt-1">
+                    Informe o estoque contado para cada sabor. O que você não preencher continua exatamente como está — nada é alterado até um administrador aprovar.
+                </p>
+            </div>
+
+            <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 flex items-start gap-3">
+                <i class="fas fa-circle-info text-blue-500 mt-0.5"></i>
+                <p class="text-sm text-blue-800">
+                    Cada valor informado é salvo automaticamente. Você pode sair e voltar depois para continuar de onde parou. Quando terminar a contagem, use "Finalizar Conferência" no rodapé.
+                </p>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
+                <div class="relative">
+                    <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm pointer-events-none"></i>
+                    <input id="filter-busca" type="text" placeholder="Buscar marca, produto ou sabor..."
+                        class="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                        oninput="aplicarFiltro()">
+                </div>
+            </div>
+
+            <div class="mb-3 flex items-center gap-2 text-sm text-gray-500 px-1">
+                <span id="contador-total" class="font-medium">Carregando...</span>
+                <span>&bull;</span>
+                <span id="contador-contados" class="font-semibold text-blue-600">0 sabores contados</span>
+            </div>
+
+            <div id="conferencia-container" class="space-y-3">
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 text-center text-gray-400">
+                    <i class="fas fa-spinner fa-spin text-2xl mb-2 block"></i>
+                    Carregando produtos...
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Barra de ação fixa (mobile-friendly) -->
+    <div class="fixed bottom-0 left-0 right-0 lg:left-64 bg-white border-t border-gray-200 shadow-lg z-20"
+         style="padding-bottom: env(safe-area-inset-bottom, 0px);">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center gap-3">
+            <button onclick="cancelarConferenciaHandler()"
+                class="px-4 py-3 border border-gray-300 bg-white rounded-lg hover:bg-gray-50 text-gray-600 font-medium text-sm transition">
+                <i class="fas fa-trash-can"></i>
+                <span class="hidden sm:inline ml-1">Descartar</span>
+            </button>
+            <div class="flex-1 text-sm text-gray-600 hidden sm:block">
+                <span id="rodape-numero"></span>
+            </div>
+            <button onclick="finalizarConferenciaHandler()"
+                class="flex-1 sm:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold text-sm transition shadow-sm">
+                <i class="fas fa-paper-plane"></i> Finalizar Conferência
+            </button>
+        </div>
+    </div>
+
+    <div id="loading" class="hidden fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
+        <div class="bg-white p-6 rounded-xl shadow-xl text-center">
+            <div class="spinner mx-auto"></div>
+            <p class="mt-4 text-gray-700">Processando...</p>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="../js/config.js"></script>
+    <script src="../js/session-manager.js"></script>
+    <script src="../js/utils.js"></script>
+    <script src="../js/auth.js"></script>
+    <script src="../js/services/conferencia-estoque.js"></script>
+    <script src="../components/navbar.js"></script>
+    <script src="../components/sidebar.js"></script>
+
+    <script>
+        let conferenciaAtual = null;
+        let todosSabores = [];
+        let itensContados = {}; // saborId -> valor numérico contado
+        let marcasExpandidas = new Set();
+
+        (async () => {
+            await checkAuth();
+            document.getElementById('navbar').innerHTML = createNavbar();
+            document.getElementById('sidebar-container').innerHTML = createSidebar();
+            await initNavbar();
+            await initSidebar();
+
+            await iniciar();
+        })();
+
+        async function iniciar() {
+            showLoading(true);
+            try {
+                const conf = await abrirConferencia();
+                conferenciaAtual = conf;
+                document.getElementById('rodape-numero').textContent = `Conferência #${conf.numero}`;
+
+                const [sabores, itens] = await Promise.all([
+                    getSaboresParaConferencia(),
+                    getItensConferencia(conf.conferencia_id)
+                ]);
+
+                todosSabores = sabores;
+                itensContados = {};
+                itens.forEach(item => {
+                    itensContados[item.sabor_id] = item.estoque_novo;
+                });
+
+                // Expande automaticamente marcas que já têm algum item contado
+                todosSabores.forEach(s => {
+                    if (itensContados[s.id] !== undefined) {
+                        marcasExpandidas.add(getMarcaSabor(s));
+                    }
+                });
+
+                renderizar();
+            } catch (err) {
+                handleError(err, 'Erro ao carregar conferência de estoque');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        function getMarcaSabor(sabor) {
+            return sabor.produto?.marca?.trim() || 'SEM MARCA';
+        }
+
+        function aplicarFiltro() {
+            renderizar();
+        }
+
+        function agruparPorMarcaEProduto(lista) {
+            const marcas = new Map();
+
+            lista.forEach(sabor => {
+                const marca = getMarcaSabor(sabor);
+                if (!marcas.has(marca)) marcas.set(marca, new Map());
+
+                const produtos = marcas.get(marca);
+                const produtoId = sabor.produto.id;
+                if (!produtos.has(produtoId)) {
+                    produtos.set(produtoId, { produto: sabor.produto, sabores: [] });
+                }
+                produtos.get(produtoId).sabores.push(sabor);
+            });
+
+            return Array.from(marcas.entries())
+                .map(([marca, produtosMap]) => ({
+                    marca,
+                    produtos: Array.from(produtosMap.values())
+                        .map(g => ({ ...g, sabores: g.sabores.sort((a, b) => (a.sabor || '').localeCompare(b.sabor || '', 'pt-BR')) }))
+                        .sort((a, b) => (a.produto.nome || '').localeCompare(b.produto.nome || '', 'pt-BR'))
+                }))
+                .sort((a, b) => a.marca.localeCompare(b.marca, 'pt-BR'));
+        }
+
+        function contarContados() {
+            return Object.keys(itensContados).length;
+        }
+
+        function buscaAtivaAtual() {
+            return (document.getElementById('filter-busca').value || '').trim().length > 0;
+        }
+
+        function getGruposAtuais() {
+            const termo = (document.getElementById('filter-busca').value || '').trim().toLowerCase();
+            const listaFiltrada = !termo ? todosSabores : todosSabores.filter(s => {
+                const texto = `${s.produto.marca || ''} ${s.produto.nome || ''} ${s.produto.codigo || ''} ${s.sabor || ''}`.toLowerCase();
+                return texto.includes(termo);
+            });
+            return agruparPorMarcaEProduto(listaFiltrada);
+        }
+
+        function renderizar() {
+            const container = document.getElementById('conferencia-container');
+            const buscaAtiva = buscaAtivaAtual();
+
+            document.getElementById('contador-total').textContent =
+                `${todosSabores.length} sabor${todosSabores.length !== 1 ? 'es' : ''} cadastrado${todosSabores.length !== 1 ? 's' : ''}`;
+            document.getElementById('contador-contados').textContent =
+                `${contarContados()} sabor${contarContados() !== 1 ? 'es' : ''} contado${contarContados() !== 1 ? 's' : ''}`;
+
+            const grupos = getGruposAtuais();
+
+            if (grupos.length === 0) {
+                container.innerHTML = `
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 text-center text-gray-400">
+                        <i class="fas fa-box-open text-3xl mb-3 block"></i>
+                        ${todosSabores.length === 0 ? 'Nenhum produto/sabor cadastrado.' : 'Nenhum resultado para a busca.'}
+                    </div>`;
+                return;
+            }
+
+            container.innerHTML = grupos.map((grupoMarca, indice) => {
+                const expandida = buscaAtiva || marcasExpandidas.has(grupoMarca.marca);
+                const totalSabores = grupoMarca.produtos.reduce((acc, p) => acc + p.sabores.length, 0);
+                const contadosMarca = grupoMarca.produtos.reduce((acc, p) =>
+                    acc + p.sabores.filter(s => itensContados[s.id] !== undefined).length, 0);
+
+                const cabecalho = `
+                    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+                        <button type="button" onclick="toggleMarca(${indice})"
+                            class="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50 transition text-left">
+                            <span class="font-semibold text-gray-800 flex items-center gap-2">
+                                <i class="fas fa-chevron-${expandida ? 'down' : 'right'} text-gray-400 text-xs"></i>
+                                ${grupoMarca.marca}
+                            </span>
+                            <span class="text-xs text-gray-500 flex items-center gap-2">
+                                ${contadosMarca > 0 ? `<span class="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium">${contadosMarca}/${totalSabores}</span>` : `${totalSabores} sabor${totalSabores !== 1 ? 'es' : ''}`}
+                            </span>
+                        </button>
+                        ${expandida ? `<div class="border-t border-gray-100 divide-y divide-gray-100">${grupoMarca.produtos.map(renderProduto).join('')}</div>` : ''}
+                    </div>`;
+
+                return cabecalho;
+            }).join('');
+        }
+
+        function renderProduto(grupoProduto) {
+            const produto = grupoProduto.produto;
+            const sku = produto.codigo || '-';
+
+            return `
+                <div class="px-4 py-3">
+                    <div class="text-sm font-semibold text-gray-800 mb-2">
+                        ${produto.nome} <span class="text-xs font-normal text-gray-400">SKU: ${sku}</span>
+                    </div>
+                    <div class="space-y-2">
+                        ${grupoProduto.sabores.map(renderSaborLinha).join('')}
+                    </div>
+                </div>`;
+        }
+
+        function renderSaborLinha(sabor) {
+            const estoqueAtual = parseFloat(sabor.quantidade) || 0;
+            const valorContado = itensContados[sabor.id];
+            const temContagem = valorContado !== undefined;
+            const diff = temContagem ? valorContado - estoqueAtual : 0;
+            const diffClass = diff > 0 ? 'text-green-600' : diff < 0 ? 'text-red-600' : 'text-gray-400';
+
+            return `
+                <div id="linha-sabor-${sabor.id}" class="rounded-lg border ${temContagem ? 'border-blue-300 bg-blue-50' : 'border-gray-200'} px-3 py-2.5 flex flex-wrap items-center gap-3">
+                    <div class="flex-1 min-w-[140px]">
+                        <div class="text-sm font-medium text-gray-900">${sabor.sabor || 'Sem sabor'}</div>
+                        <div class="text-xs text-gray-500">Estoque atual: <span class="font-semibold text-gray-700">${estoqueAtual.toFixed(2)}</span></div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input id="input-sabor-${sabor.id}" type="number" min="0" step="0.01" inputmode="decimal"
+                            value="${temContagem ? valorContado : ''}" placeholder="—"
+                            class="w-24 text-center px-2 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                            onchange="onContagemChange('${sabor.id}', this.value)">
+                        <span id="diff-sabor-${sabor.id}" class="text-xs w-14 text-right ${diffClass}">${temContagem ? `${diff >= 0 ? '+' : ''}${diff.toFixed(2)}` : ''}</span>
+                        <span id="status-sabor-${sabor.id}" class="w-4 text-center text-xs"></span>
+                    </div>
+                </div>`;
+        }
+
+        function toggleMarca(indice) {
+            const grupos = getGruposAtuais();
+            const marca = grupos[indice]?.marca;
+            if (!marca) return;
+
+            if (marcasExpandidas.has(marca)) marcasExpandidas.delete(marca);
+            else marcasExpandidas.add(marca);
+            renderizar();
+        }
+
+        async function onContagemChange(saborId, valor) {
+            const statusEl = document.getElementById(`status-sabor-${saborId}`);
+            const valorNum = valor === '' ? null : parseFloat(valor);
+
+            if (valor !== '' && (isNaN(valorNum) || valorNum < 0)) {
+                showToast('Valor de estoque inválido.', 'error');
+                return;
+            }
+
+            if (statusEl) statusEl.innerHTML = '<i class="fas fa-spinner fa-spin text-gray-400"></i>';
+
+            try {
+                await salvarItemConferencia(conferenciaAtual.conferencia_id, saborId, valorNum);
+
+                if (valorNum === null) {
+                    delete itensContados[saborId];
+                } else {
+                    itensContados[saborId] = valorNum;
+                }
+
+                if (statusEl) {
+                    statusEl.innerHTML = '<i class="fas fa-check text-green-500"></i>';
+                    setTimeout(() => { if (statusEl) statusEl.innerHTML = ''; }, 1500);
+                }
+
+                atualizarLinhaSabor(saborId);
+                atualizarContadores();
+            } catch (err) {
+                if (statusEl) statusEl.innerHTML = '<i class="fas fa-triangle-exclamation text-red-500"></i>';
+                handleError(err, 'Erro ao salvar item da conferência');
+            }
+        }
+
+        function atualizarLinhaSabor(saborId) {
+            const sabor = todosSabores.find(s => s.id === saborId);
+            if (!sabor) return;
+
+            const linha = document.getElementById(`linha-sabor-${saborId}`);
+            const diffEl = document.getElementById(`diff-sabor-${saborId}`);
+            if (!linha || !diffEl) return;
+
+            const estoqueAtual = parseFloat(sabor.quantidade) || 0;
+            const temContagem = itensContados[saborId] !== undefined;
+            const diff = temContagem ? itensContados[saborId] - estoqueAtual : 0;
+
+            linha.classList.toggle('border-blue-300', temContagem);
+            linha.classList.toggle('bg-blue-50', temContagem);
+            linha.classList.toggle('border-gray-200', !temContagem);
+
+            diffEl.textContent = temContagem ? `${diff >= 0 ? '+' : ''}${diff.toFixed(2)}` : '';
+            diffEl.className = `text-xs w-14 text-right ${diff > 0 ? 'text-green-600' : diff < 0 ? 'text-red-600' : 'text-gray-400'}`;
+        }
+
+        function atualizarContadores() {
+            document.getElementById('contador-contados').textContent =
+                `${contarContados()} sabor${contarContados() !== 1 ? 'es' : ''} contado${contarContados() !== 1 ? 's' : ''}`;
+        }
+
+        async function finalizarConferenciaHandler() {
+            if (contarContados() === 0) {
+                showToast('Conte ao menos um sabor antes de finalizar.', 'warning');
+                return;
+            }
+
+            const resultado = await finalizarConferencia(conferenciaAtual.conferencia_id);
+            if (resultado) {
+                redirect('/pages/dashboard.html');
+            }
+        }
+
+        async function cancelarConferenciaHandler() {
+            const resultado = await cancelarConferencia(conferenciaAtual.conferencia_id);
+            if (resultado) {
+                itensContados = {};
+                await iniciar();
+            }
+        }
+    </script>
+</body>
+</html>
