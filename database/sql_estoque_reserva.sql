@@ -170,7 +170,8 @@ SELECT
     es.sabor_id,
     ps.sabor AS sabor_nome,
     es.quantidade,
-    es.updated_at
+    es.updated_at,
+    COALESCE(ps.quantidade, p.estoque_atual) AS quantidade_estoque_principal
 FROM public.estoque_saldos es
 JOIN public.estoques e ON e.id = es.estoque_id
 JOIN public.produtos p ON p.id = es.produto_id
