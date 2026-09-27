@@ -58,7 +58,7 @@
             <!-- ABA: Mover para Reserva -->
             <div id="aba-mover" class="tab-content">
                 <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5 mb-4">
-                    <div class="grid grid-cols-1 md:grid-cols-[1fr_260px_auto] gap-4 items-end">
+                    <div class="grid grid-cols-1 md:grid-cols-[1fr_260px_auto_auto] gap-4 items-end">
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Buscar produto ou sabor</label>
                             <div class="relative">
@@ -73,6 +73,13 @@
                             <select id="select-estoque-destino" onchange="renderizarTabelaMover()" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
                                 <option value="">Selecione...</option>
                             </select>
+                        </div>
+                        <div>
+                            <button onclick="abrirModalImportarLista()"
+                                title="Cole uma lista no formato &quot;▪️ 18 SABOR = 10&quot; para preencher as quantidades automaticamente"
+                                class="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 border border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 font-medium text-sm transition whitespace-nowrap">
+                                <i class="fas fa-paste"></i> Importar Lista
+                            </button>
                         </div>
                         <div>
                             <button id="btn-mover-todos" onclick="moverTodosFiltrados()" disabled
@@ -177,6 +184,36 @@
         </div>
     </div>
 
+    <!-- Modal: Importar lista -->
+    <div id="modal-importar-lista" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+            <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+                <h2 class="text-xl font-bold text-gray-900">Importar Lista</h2>
+                <button onclick="fecharModalImportarLista()" class="text-gray-400 hover:text-gray-600 transition">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-6 space-y-4 overflow-y-auto">
+                <p class="text-sm text-gray-500">
+                    Cole a lista com o nome do produto numa linha e os sabores abaixo, no formato
+                    <code class="bg-gray-100 px-1 rounded">▪️ 18 SABOR = 10</code>. O número depois do
+                    <strong>=</strong> é a quantidade a mover; sabores sem <strong>=</strong> são ignorados.
+                    Nada é movido aqui: as quantidades só são preenchidas na lista para você conferir e clicar em "Mover Preenchidos".
+                </p>
+                <textarea id="importar-lista-texto" rows="10" oninput="processarListaImportada()"
+                    class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-blue-500"></textarea>
+                <div id="importar-lista-preview"></div>
+            </div>
+            <div class="flex justify-end gap-3 px-6 py-4 border-t border-gray-200">
+                <button onclick="fecharModalImportarLista()" class="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium text-sm">Cancelar</button>
+                <button id="btn-aplicar-lista" onclick="aplicarListaImportada()" disabled
+                    class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm disabled:opacity-40 disabled:cursor-not-allowed">
+                    Preencher quantidades
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div id="loading" class="hidden fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50">
         <div class="bg-white p-6 rounded-xl shadow-xl text-center">
             <div class="spinner mx-auto"></div>
@@ -198,6 +235,15 @@
         let catalogo = [];
         let saldos = [];
         const produtosExpandidosMover = new Set();
+        // Quantidades digitadas (ou importadas) na aba "Mover", por chave
+        // saborId || produtoId. Fica fora do DOM para não se perder quando a
+        // lista é re-renderizada (busca, recolher/expandir produto) e para que
+        // "Mover Preenchidos" alcance também os produtos recolhidos.
+        const quantidadesMover = new Map();
+
+        function chaveItemMover(item) {
+            return item.saborId || item.produtoId;
+        }
 
         (async () => {
             await checkAuth();
@@ -382,7 +428,9 @@
             const grupos = agruparPorProduto(itensFiltrados);
 
             const linhaItem = (item, comSaborLabel) => {
-                const chaveInput = `qtd-mover-${item.saborId || item.produtoId}`;
+                const chave = chaveItemMover(item);
+                const chaveInput = `qtd-mover-${chave}`;
+                const valorPreenchido = quantidadesMover.get(chave) ?? '';
                 return `
                     <div class="flex items-center justify-between gap-3 px-4 py-2.5 ${comSaborLabel ? 'border-t border-gray-100' : ''}">
                         ${comSaborLabel
@@ -393,7 +441,8 @@
                             <span class="text-sm font-medium w-24 text-right">${formatarQtd(item.disponivel)} ${escapeHtml(item.unidade || '')}</span>
                             <input type="number" id="${chaveInput}" min="0" step="0.01" max="${item.disponivel}"
                                 class="w-24 px-2 py-1.5 border border-gray-300 rounded-lg text-sm text-center focus:ring-2 focus:ring-blue-500"
-                                oninput="validarQuantidadeMover('${chaveInput}', ${item.disponivel})"
+                                oninput="atualizarQuantidadeMover('${chave}', ${item.disponivel})"
+                                value="${valorPreenchido}"
                                 placeholder="0">
                             <button id="${chaveInput}-btn" onclick="executarMover('${item.produtoId}', ${item.saborId ? `'${item.saborId}'` : 'null'}, '${chaveInput}', ${item.disponivel})"
                                 disabled
@@ -418,6 +467,8 @@
                 const expandido = buscaAtiva || produtosExpandidosMover.has(grupo.produtoId);
                 const totalDisponivel = grupo.itens.reduce((soma, i) => soma + i.disponivel, 0);
                 const temAlgumDisponivel = grupo.itens.some(i => i.disponivel > 0);
+                const preenchidos = grupo.itens.filter(i => quantidadesMover.has(chaveItemMover(i)));
+                const totalPreenchido = preenchidos.reduce((soma, i) => soma + quantidadesMover.get(chaveItemMover(i)), 0);
 
                 const cabecalho = `
                     <div class="flex items-center justify-between px-4 py-3 bg-gray-50 cursor-pointer" onclick="toggleProdutoMover('${grupo.produtoId}')">
@@ -426,6 +477,7 @@
                             <span class="font-semibold text-gray-900 truncate">${escapeHtml(grupo.produtoNome)}</span>
                             <span class="text-gray-400 text-xs flex-shrink-0">(${escapeHtml(grupo.produtoCodigo)})</span>
                             <span class="text-xs text-gray-500 flex-shrink-0">• ${grupo.itens.length} sabores • ${formatarQtd(totalDisponivel)} ${escapeHtml(grupo.unidade || '')} disponíveis</span>
+                            ${preenchidos.length > 0 ? `<span class="text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5 flex-shrink-0">${preenchidos.length} preenchido(s) • ${formatarQtd(totalPreenchido)} a mover</span>` : ''}
                         </div>
                         <button onclick="event.stopPropagation(); moverTudoProduto('${grupo.produtoId}')" ${!temAlgumDisponivel ? 'disabled' : ''}
                             title="Move os sabores deste produto que tiverem quantidade preenchida ao lado"
@@ -442,6 +494,25 @@
                     ${expandido ? linhas : ''}
                 </div>`;
             }).join('');
+
+            // Restaura dica/botão das linhas que já vieram com quantidade preenchida
+            itensFiltrados.forEach(item => {
+                const chave = chaveItemMover(item);
+                if (quantidadesMover.has(chave) && document.getElementById(`qtd-mover-${chave}`)) {
+                    validarQuantidadeMover(`qtd-mover-${chave}`, item.disponivel);
+                }
+            });
+        }
+
+        function atualizarQuantidadeMover(chave, disponivel) {
+            const inputId = `qtd-mover-${chave}`;
+            const valor = parseFloat(document.getElementById(inputId).value);
+            if (isNaN(valor) || valor <= 0) {
+                quantidadesMover.delete(chave);
+            } else {
+                quantidadesMover.set(chave, valor);
+            }
+            validarQuantidadeMover(inputId, disponivel);
         }
 
         function toggleProdutoMover(produtoId) {
@@ -495,8 +566,9 @@
                     estoqueDestinoId,
                     quantidade
                 });
+                quantidadesMover.delete(saborId || produtoId);
                 showToast(resultado.mensagem, 'success');
-                await Promise.all([carregarCatalogo(), carregarSaldos()]);
+                await Promise.all([carregarCatalogo(), carregarSaldos(), carregarHistorico()]);
             } catch (error) {
                 handleError(error, 'Erro ao mover estoque');
             } finally {
@@ -524,11 +596,9 @@
             const falhasValidacao = [];
 
             itens.forEach(item => {
-                const chaveInput = `qtd-mover-${item.saborId || item.produtoId}`;
-                const input = document.getElementById(chaveInput);
-                const quantidade = input ? parseFloat(input.value) : NaN;
+                const quantidade = quantidadesMover.get(chaveItemMover(item));
 
-                if (isNaN(quantidade) || quantidade <= 0) return; // não preenchido, não faz parte da operação
+                if (!quantidade || quantidade <= 0) return; // não preenchido, não faz parte da operação
 
                 if (quantidade > item.disponivel) {
                     falhasValidacao.push(`${item.produtoNome}${item.saborNome ? ' / ' + item.saborNome : ''}: quantidade digitada (${formatarQtd(quantidade)}) maior que o disponível (${formatarQtd(item.disponivel)})`);
@@ -568,6 +638,7 @@
                             estoqueDestinoId,
                             quantidade
                         });
+                        quantidadesMover.delete(chaveItemMover(item));
                         sucessos++;
                     } catch (error) {
                         falhas.push(`${item.produtoNome}${item.saborNome ? ' / ' + item.saborNome : ''}: ${error.message}`);
@@ -581,7 +652,7 @@
                     showToast(`${sucessos} movido(s), ${falhas.length} falharam (veja o console para detalhes)`, 'warning');
                 }
 
-                await Promise.all([carregarCatalogo(), carregarSaldos()]);
+                await Promise.all([carregarCatalogo(), carregarSaldos(), carregarHistorico()]);
             } finally {
                 showLoading(false);
             }
@@ -602,6 +673,183 @@
                        (item.saborNome || '').toLowerCase().includes(termo);
             });
             moverVariosParaReserva(itens, termo ? `Mover os itens preenchidos filtrados por "${termo}"?` : 'Mover os itens preenchidos de toda a lista?');
+        }
+
+        // -------------------------------------------------------------
+        // Importar lista (preenche quantidades, NÃO move nada)
+        // -------------------------------------------------------------
+        // Formato esperado (o mesmo das listas enviadas no WhatsApp):
+        //   ✅ NOME DO PRODUTO
+        //   ▪️ 18 SABOR A = 10     -> move 10 do sabor A
+        //   ▪️ 07 SABOR B          -> sem "=", ignorado
+        //   📦 TOTAL: 312 PEÇAS    -> ignorado
+        // O número antes do sabor é só informativo (saldo na hora da lista).
+        let resultadoImportacao = [];
+
+        function normalizarTextoLista(texto) {
+            return (texto || '')
+                .normalize('NFD').replace(/[̀-ͯ]/g, '')
+                .toUpperCase()
+                .replace(/[^A-Z0-9]+/g, ' ')
+                .trim();
+        }
+
+        function abrirModalImportarLista() {
+            document.getElementById('importar-lista-texto').value = '';
+            resultadoImportacao = [];
+            renderizarPreviewImportacao();
+            document.getElementById('modal-importar-lista').classList.remove('hidden');
+            document.getElementById('importar-lista-texto').focus();
+        }
+
+        function fecharModalImportarLista() {
+            document.getElementById('modal-importar-lista').classList.add('hidden');
+        }
+
+        function buscarItemPorNome(nomeNormalizado, itensProdutoAtual) {
+            const casa = item => normalizarTextoLista(item.saborNome || item.produtoNome) === nomeNormalizado;
+            if (itensProdutoAtual) {
+                return itensProdutoAtual.filter(casa);
+            }
+            return catalogo.filter(casa);
+        }
+
+        function processarListaImportada() {
+            const texto = document.getElementById('importar-lista-texto').value;
+            const nomesProdutos = new Map();
+            catalogo.forEach(item => nomesProdutos.set(normalizarTextoLista(item.produtoNome), item.produtoId));
+
+            let itensProdutoAtual = null;
+            const chavesUsadas = new Set();
+            resultadoImportacao = [];
+
+            texto.split(/\r?\n/).forEach(linhaOriginal => {
+                const linha = linhaOriginal.trim().replace(/^[^\p{L}\p{N}]+/u, '');
+                if (!linha || /^TOTAL\b/i.test(linha)) return;
+
+                const [ladoNome, ladoQtd] = linha.split('=');
+
+                // Linha de cabeçalho: é o nome de um produto
+                if (ladoQtd === undefined) {
+                    const produtoId = nomesProdutos.get(normalizarTextoLista(linha));
+                    if (produtoId) {
+                        itensProdutoAtual = catalogo.filter(i => i.produtoId === produtoId);
+                        return;
+                    }
+                }
+
+                const nomeNormalizado = normalizarTextoLista(ladoNome);
+                const semContagem = nomeNormalizado.replace(/^\d+\s+/, '');
+                let encontrados = buscarItemPorNome(semContagem, itensProdutoAtual);
+                if (encontrados.length === 0 && semContagem !== nomeNormalizado) {
+                    encontrados = buscarItemPorNome(nomeNormalizado, itensProdutoAtual);
+                }
+
+                const quantidade = ladoQtd === undefined ? null : parseFloat(ladoQtd.trim().replace(',', '.'));
+                const registro = { linha: linhaOriginal.trim(), item: encontrados[0] || null, quantidade, status: 'ok' };
+
+                if (encontrados.length === 0) {
+                    registro.status = 'nao_encontrado';
+                } else if (encontrados.length > 1) {
+                    registro.status = 'ambiguo';
+                    registro.item = null;
+                } else if (quantidade === null) {
+                    registro.status = 'sem_quantidade';
+                } else if (isNaN(quantidade) || quantidade <= 0) {
+                    registro.status = 'quantidade_invalida';
+                } else if (quantidade > registro.item.disponivel) {
+                    registro.status = 'acima';
+                } else if (chavesUsadas.has(chaveItemMover(registro.item))) {
+                    registro.status = 'duplicado';
+                } else {
+                    chavesUsadas.add(chaveItemMover(registro.item));
+                }
+
+                resultadoImportacao.push(registro);
+            });
+
+            renderizarPreviewImportacao();
+        }
+
+        function renderizarPreviewImportacao() {
+            const container = document.getElementById('importar-lista-preview');
+            const validos = resultadoImportacao.filter(r => r.status === 'ok');
+            document.getElementById('btn-aplicar-lista').disabled = validos.length === 0;
+
+            if (resultadoImportacao.length === 0) {
+                container.innerHTML = '';
+                return;
+            }
+
+            const rotulos = {
+                ok: ['Será preenchido', 'text-green-700 bg-green-50'],
+                sem_quantidade: ['Sem "=", ignorado', 'text-gray-500 bg-gray-50'],
+                nao_encontrado: ['Não encontrado', 'text-red-700 bg-red-50'],
+                ambiguo: ['Mais de um item com esse nome', 'text-red-700 bg-red-50'],
+                quantidade_invalida: ['Quantidade inválida', 'text-red-700 bg-red-50'],
+                acima: ['Maior que o disponível', 'text-red-700 bg-red-50'],
+                duplicado: ['Repetido na lista, ignorado', 'text-orange-700 bg-orange-50']
+            };
+
+            const total = validos.reduce((soma, r) => soma + r.quantidade, 0);
+            const problemas = resultadoImportacao.filter(r => !['ok', 'sem_quantidade'].includes(r.status)).length;
+
+            container.innerHTML = `
+                <div class="text-sm mb-2">
+                    <strong>${validos.length}</strong> item(ns) serão preenchidos, totalizando <strong>${formatarQtd(total)}</strong> unidade(s)
+                    ${problemas > 0 ? `<span class="text-red-600 ml-2"><i class="fas fa-triangle-exclamation"></i> ${problemas} linha(s) com problema</span>` : ''}
+                </div>
+                <div class="border border-gray-200 rounded-lg overflow-hidden">
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-50 text-[11px] uppercase text-gray-500">
+                            <tr>
+                                <th class="px-3 py-2 text-left">Produto / Sabor</th>
+                                <th class="px-3 py-2 text-center">Disponível</th>
+                                <th class="px-3 py-2 text-center">A mover</th>
+                                <th class="px-3 py-2 text-left">Situação</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-100">
+                            ${resultadoImportacao.map(r => {
+                                const [rotulo, classe] = rotulos[r.status];
+                                const nome = r.item
+                                    ? `${escapeHtml(r.item.produtoNome)}${r.item.saborNome ? ` <span class="text-gray-400">/</span> ${escapeHtml(r.item.saborNome)}` : ''}`
+                                    : `<span class="text-gray-500">${escapeHtml(r.linha)}</span>`;
+                                return `
+                                <tr>
+                                    <td class="px-3 py-1.5">${nome}</td>
+                                    <td class="px-3 py-1.5 text-center text-gray-600">${r.item ? formatarQtd(r.item.disponivel) : '—'}</td>
+                                    <td class="px-3 py-1.5 text-center font-medium">${r.quantidade !== null && !isNaN(r.quantidade) ? formatarQtd(r.quantidade) : '—'}</td>
+                                    <td class="px-3 py-1.5"><span class="px-2 py-0.5 rounded text-xs ${classe}">${rotulo}</span></td>
+                                </tr>`;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>`;
+        }
+
+        function aplicarListaImportada() {
+            const validos = resultadoImportacao.filter(r => r.status === 'ok');
+            if (validos.length === 0) return;
+
+            validos.forEach(({ item, quantidade }) => {
+                quantidadesMover.set(chaveItemMover(item), quantidade);
+                produtosExpandidosMover.add(item.produtoId);
+            });
+
+            // Se só existe um estoque ativo e nenhum destino foi escolhido, já seleciona ele
+            const selDestino = document.getElementById('select-estoque-destino');
+            const ativos = estoques.filter(e => e.ativo);
+            if (!selDestino.value && ativos.length === 1) {
+                selDestino.value = ativos[0].id;
+            }
+
+            document.getElementById('busca-mover').value = '';
+            fecharModalImportarLista();
+            renderizarTabelaMover();
+
+            const total = validos.reduce((soma, r) => soma + r.quantidade, 0);
+            showToast(`${validos.length} item(ns) preenchidos (${formatarQtd(total)} un.). Confira e clique em "Mover Preenchidos".`, 'success');
         }
 
         // -------------------------------------------------------------
