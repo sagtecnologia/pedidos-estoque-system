@@ -641,8 +641,16 @@
         async function carregarDados() {
             showLoading(true);
             try {
-                // Carregar produtos
-                todosProdutos = await listProdutos();
+                // Carregar produtos, INCLUSIVE os inativos: vendas antigas de um
+                // produto desativado continuam sendo receita/custo do período.
+                // listProdutos() traz só os ativos e fazia esses itens sumirem da
+                // análise, divergindo do total da tela de Vendas.
+                const { data: produtosData, error: errorProdutos } = await supabase
+                    .from('produtos')
+                    .select('*')
+                    .order('nome');
+                if (errorProdutos) throw errorProdutos;
+                todosProdutos = produtosData || [];
                 
                 // Carregar custos de todos os produtos da tabela estoque_movimentacoes
                 const { data: todasEntradas } = await supabase
@@ -712,15 +720,25 @@
                 const itensVendas = [];
                 const tamanhoLote = 50;
 
+                // O Supabase devolve no máximo 1000 linhas por consulta: um lote de
+                // 50 pedidos pode ter mais itens que isso, então pagina com range().
+                const tamanhoPagina = 1000;
+
                 for (let inicio = 0; inicio < pedidosVendaIds.length; inicio += tamanhoLote) {
                     const loteIds = pedidosVendaIds.slice(inicio, inicio + tamanhoLote);
-                    const { data, error: errorItensVendas } = await supabase
-                        .from('pedido_itens')
-                        .select('*, sabor:produto_sabores(id, sabor, quantidade)')
-                        .in('pedido_id', loteIds);
 
-                    if (errorItensVendas) throw errorItensVendas;
-                    itensVendas.push(...(data || []));
+                    for (let offset = 0; ; offset += tamanhoPagina) {
+                        const { data, error: errorItensVendas } = await supabase
+                            .from('pedido_itens')
+                            .select('*, sabor:produto_sabores(id, sabor, quantidade)')
+                            .in('pedido_id', loteIds)
+                            .order('id')
+                            .range(offset, offset + tamanhoPagina - 1);
+
+                        if (errorItensVendas) throw errorItensVendas;
+                        itensVendas.push(...(data || []));
+                        if (!data || data.length < tamanhoPagina) break;
+                    }
                 }
 
                 const itensPorPedido = itensVendas.reduce((mapa, item) => {
