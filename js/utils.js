@@ -169,7 +169,7 @@ function canViewProfitValues(userOrRole) {
 }
 
 function canCancelVenda(userOrRole) {
-    return getRoleValue(userOrRole) === 'ADMIN';
+    return ['ADMIN', 'COMERCIAL'].includes(getRoleValue(userOrRole));
 }
 
 function getDefaultRouteForUser(userOrRole) {

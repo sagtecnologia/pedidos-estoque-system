@@ -1631,8 +1631,8 @@
                 }
             }
             
-            // Botão de cancelar disponível para ADMIN em vendas FINALIZADAS
-            if (venda.status === 'FINALIZADO' && currentUser.role === 'ADMIN') {
+            // ADMIN e COMERCIAL podem cancelar ou reabrir vendas finalizadas.
+            if (venda.status === 'FINALIZADO' && canCancelVenda(currentUser)) {
                 botoes.push('<button onclick="openModal(\'modal-cancelar\')" class="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700">🚫 Cancelar Venda</button>');
             }
             
@@ -2199,7 +2199,7 @@
                 
                 const msgSucesso = novoStatus === 'CANCELADO' 
                     ? '✅ Venda cancelada definitivamente! Os itens foram devolvidos ao estoque com sucesso.' 
-                    : '✅ Venda cancelada e reaberta como rascunho! O estoque permaneceu intacto.';
+                    : '✅ Venda reaberta como rascunho! Os itens foram devolvidos ao estoque.';
                 
                 showToast(msgSucesso, 'success');
                 closeModal('modal-cancelar');
