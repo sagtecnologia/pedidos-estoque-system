@@ -9,7 +9,7 @@ async function listMovimentacoes(filters = {}) {
             .from('estoque_movimentacoes')
             .select(`
                 *,
-                produto:produtos(codigo, nome, unidade),
+                produto:produtos(id, codigo, nome, unidade),
                 usuario:users(full_name),
                 pedido:pedidos(
                     numero,

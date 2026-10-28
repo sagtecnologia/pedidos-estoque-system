@@ -204,6 +204,7 @@
     <script>
         let editingId = null;
         let saboresCount = 0;
+        let editProdutoRequisicao = 0;
         let currentUser = null;
         let editingPrecoCompraOriginal = 0;
         let produtosListados = [];
@@ -359,6 +360,11 @@
                 
                 if (nome) {
                     const existente = saboresMap.get(nome);
+                    if (existente && saborId && existente.id === saborId) {
+                        // Mesma linha de sabor já cadastrado repetida no formulário:
+                        // é duplicata de tela, não estoque novo. Não somar.
+                        return;
+                    }
                     if (existente) {
                         existente.quantidade += qtd;
                         if (!existente.id && saborId) {
@@ -665,8 +671,11 @@
         });
 
         async function editProduto(id) {
+            // Evita que dois cliques seguidos em "Editar" montem os sabores
+            // duas vezes no formulário (isso fazia o estoque dos sabores dobrar ao salvar).
+            const requisicao = ++editProdutoRequisicao;
             const produto = await getProduto(id);
-            if (!produto) return;
+            if (!produto || requisicao !== editProdutoRequisicao) return;
 
             editingId = id;
             editingPrecoCompraOriginal = produto.preco_compra || produto.preco || 0;
@@ -683,8 +692,9 @@
             configurePrecoCompraField(produto);
             
             // Carregar sabores
-            limparSabores();
             const sabores = await getSaboresProduto(id);
+            if (requisicao !== editProdutoRequisicao) return;
+            limparSabores();
             if (sabores && sabores.length > 0) {
                 sabores.forEach(s => adicionarSabor(s.sabor, s.quantidade, s.id, s.codigo_barras || ''));
             }

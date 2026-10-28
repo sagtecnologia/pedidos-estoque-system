@@ -806,12 +806,18 @@
                 return;
             }
             
-            // Agrupar por produto + pedido (soma quantidades)
+            // Agrupar por operação: produto + pedido + tipo + momento + observação.
+            // Cada operação (finalizar pedido, ajuste, reabertura...) grava todos os
+            // sabores no mesmo instante, então vira uma linha só, sem misturar
+            // entradas com saídas nem operações diferentes.
             const gruposProdutoPedido = {};
             movimentacoes.forEach(m => {
                 const pedidoKey = m.pedido_id || 'sem-pedido';
-                const grupoKey = `${m.produto_id}|${pedidoKey}`;
-                
+                const grupoKey = `${m.produto_id}|${pedidoKey}|${m.tipo}|${m.created_at}|${m.observacao || ''}`;
+                const qtd = parseFloat(m.quantidade) || 0;
+                const anterior = parseFloat(m.estoque_anterior) || 0;
+                const novo = parseFloat(m.estoque_novo) || 0;
+
                 if (!gruposProdutoPedido[grupoKey]) {
                     gruposProdutoPedido[grupoKey] = {
                         produto_id: m.produto_id,
@@ -819,25 +825,22 @@
                         pedido_id: m.pedido_id,
                         pedido: m.pedido,
                         tipo: m.tipo,
-                        quantidade: 0,
+                        quantidade: qtd,
                         preco_compra_entrada: m.preco_compra_entrada || 0,
                         usuario: m.usuario,
                         created_at: m.created_at,
-                        estoque_anterior: m.estoque_anterior,
-                        estoque_novo: m.estoque_novo
+                        observacao: m.observacao,
+                        // Soma dos sabores envolvidos na operação
+                        estoque_anterior: anterior,
+                        estoque_novo: novo,
+                        qtd_sabores: 1
                     };
                 } else {
                     const g = gruposProdutoPedido[grupoKey];
-                    g.quantidade += m.quantidade;
-                    if (new Date(m.created_at) > new Date(g.created_at)) {
-                        g.created_at = m.created_at;
-                    }
-                    if (g.estoque_novo === null || g.estoque_novo === undefined) {
-                        g.estoque_novo = m.estoque_novo;
-                    }
-                    if (g.estoque_anterior === null || g.estoque_anterior === undefined) {
-                        g.estoque_anterior = m.estoque_anterior;
-                    }
+                    g.quantidade += qtd;
+                    g.estoque_anterior += anterior;
+                    g.estoque_novo += novo;
+                    g.qtd_sabores += 1;
                 }
             });
             
@@ -882,11 +885,13 @@
                                 ? '<span class="px-2 py-1 text-xs rounded-full bg-red-100 text-red-800">Saída</span>'
                                 : '<span class="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-800">Estorno</span>');
                         
-                        const tipoDescricao = g.tipo === 'ENTRADA' 
-                            ? 'Entrada' 
-                            : (g.tipo === 'SAIDA' 
-                                ? 'Saída' 
-                                : 'Estorno de Saída');
+                        const tipoDescricao = g.observacao
+                            || (g.tipo === 'ENTRADA'
+                                ? 'Entrada'
+                                : (g.tipo === 'SAIDA'
+                                    ? 'Saída'
+                                    : 'Estorno de Saída'));
+                        const sufixoSabores = g.qtd_sabores > 1 ? ` <span class="text-xs text-gray-400">(${g.qtd_sabores} sabores)</span>` : '';
                         
                         let pedidoInfo = '-';
                         if (g.pedido) {
@@ -909,9 +914,9 @@
                                 <td class="px-6 py-4 text-sm text-gray-600">${formatDateTime(g.created_at)}</td>
                                 <td class="px-6 py-4 text-sm">${tipoBadge}</td>
                                 <td class="px-6 py-4 text-sm text-gray-900">${produtoNome}</td>
-                                <td class="px-6 py-4 text-sm font-medium">${g.quantidade} ${produtoUnidade}</td>
-                                <td class="px-6 py-4 text-sm text-gray-600">${g.estoque_anterior || '-'}</td>
-                                <td class="px-6 py-4 text-sm text-gray-600">${g.estoque_novo || '-'}</td>
+                                <td class="px-6 py-4 text-sm font-medium">${g.quantidade} ${produtoUnidade}${sufixoSabores}</td>
+                                <td class="px-6 py-4 text-sm text-gray-600" title="Soma dos sabores movimentados nesta operação">${g.estoque_anterior}</td>
+                                <td class="px-6 py-4 text-sm text-gray-600" title="Soma dos sabores movimentados nesta operação">${g.estoque_novo}</td>
                                 <td class="px-6 py-4 text-sm font-medium text-blue-600">${valorCompra}</td>
                                 <td class="px-6 py-4">${pedidoInfo}</td>
                                 <td class="px-6 py-4 text-sm text-gray-600">${g.usuario?.full_name || '-'}</td>
