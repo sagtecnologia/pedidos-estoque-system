@@ -5,6 +5,7 @@
 // Listar movimentações
 async function listMovimentacoes(filters = {}) {
     try {
+        const montarQuery = () => {
         let query = supabase
             .from('estoque_movimentacoes')
             .select(`
@@ -35,10 +36,27 @@ async function listMovimentacoes(filters = {}) {
         if (filters.pedido_id) {
             query = query.eq('pedido_id', filters.pedido_id);
         }
+        return query;
+        };
 
-        const { data, error } = await query;
-
-        if (error) throw error;
+        let data = [];
+        if (filters.todas && !filters.limit) {
+            // O Supabase devolve no máximo 1000 linhas por consulta:
+            // busca em páginas até trazer o histórico completo.
+            const TAM_PAGINA = 1000;
+            for (let inicio = 0; ; inicio += TAM_PAGINA) {
+                const { data: pagina, error } = await montarQuery()
+                    .order('id', { ascending: true })
+                    .range(inicio, inicio + TAM_PAGINA - 1);
+                if (error) throw error;
+                data = data.concat(pagina || []);
+                if (!pagina || pagina.length < TAM_PAGINA) break;
+            }
+        } else {
+            const { data: resultado, error } = await montarQuery();
+            if (error) throw error;
+            data = resultado || [];
+        }
         
         // ✅ Buscar preco_unitario de pedido_itens quando for pedido de COMPRA
         const movimentacoesComPreco = await Promise.all(data.map(async (mov) => {

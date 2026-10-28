@@ -530,12 +530,36 @@
             aplicarFiltros();
         }
 
-        function aplicarFiltros() {
+        // Produtos cujo histórico completo de movimentações já foi carregado
+        const historicoCompletoCarregado = new Set();
+
+        // A carga inicial traz só as movimentações mais recentes do sistema todo.
+        // Ao filtrar um produto, busca o histórico inteiro dele (inclusive compras antigas).
+        async function garantirHistoricoProduto(produtoId) {
+            if (!produtoId || historicoCompletoCarregado.has(produtoId)) return;
+            showLoading(true);
+            try {
+                const movsProduto = await listMovimentacoes({ produto_id: produtoId, todas: true });
+                const idsExistentes = new Set(todasMovimentacoes.map(m => m.id));
+                const novas = movsProduto.filter(m => !idsExistentes.has(m.id));
+                if (novas.length > 0) {
+                    todasMovimentacoes = todasMovimentacoes
+                        .concat(novas)
+                        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                }
+                historicoCompletoCarregado.add(produtoId);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function aplicarFiltros() {
             filtroAtual.marca = document.getElementById('filter-marca').value;
             filtroAtual.produto = document.getElementById('filter-produto').value;
             filtroAtual.sabor = document.getElementById('filter-sabor').value;
             filtroAtual.situacao = document.getElementById('filter-situacao').value;
-            
+
+            await garantirHistoricoProduto(filtroAtual.produto);
             renderizarTabAtiva();
             calcularTotaisEstoque();
         }
@@ -603,7 +627,9 @@
                 
                 // Carregar movimentações
                 todasMovimentacoes = await listMovimentacoes();
-                
+                historicoCompletoCarregado.clear();
+                await garantirHistoricoProduto(filtroAtual.produto);
+
                 renderizarTabAtiva();
                 calcularTotaisEstoque();
             } catch (error) {
