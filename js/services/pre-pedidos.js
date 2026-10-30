@@ -35,7 +35,22 @@ async function listarProdutosPublicos(filtros = {}) {
                                             .order('nome', { ascending: true });
         
         if (error) throw error;
-        return data || [];
+
+        const { data: categorias, error: categoriasError } = await supabase
+            .from('produtos')
+            .select('id, categoria')
+            .eq('active', true);
+
+        if (categoriasError) throw categoriasError;
+
+        const categoriaPorProduto = new Map(
+            (categorias || []).map(produto => [produto.id, produto.categoria])
+        );
+
+        return (data || []).map(produto => ({
+            ...produto,
+            categoria: categoriaPorProduto.get(produto.id) || null
+        }));
     } catch (error) {
         console.error('Erro ao listar produtos públicos:', error);
         throw error;

@@ -499,3 +499,27 @@ async function getProdutosPorMarca(marca) {
         return [];
     }
 }
+
+// Listar produtos por categoria para seleção na venda
+async function getProdutosPorCategoria(categoria) {
+    try {
+        let query = supabase
+            .from('produtos')
+            .select('*')
+            .eq('active', true)
+            .order('nome');
+
+        query = categoria === '__sem_categoria__'
+            ? query.is('categoria', null)
+            : query.ilike('categoria', categoria);
+
+        const { data, error } = await query;
+
+        if (error) throw error;
+        return data || [];
+
+    } catch (error) {
+        handleError(error, 'Erro ao buscar produtos por categoria');
+        return [];
+    }
+}

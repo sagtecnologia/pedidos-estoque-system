@@ -374,12 +374,12 @@
                     <p id="barcode-feedback" class="text-sm text-gray-600 mt-2 hidden"></p>
                 </div>
 
-                <!-- Seleção de Marca e Produto -->
+                <!-- Seleção de Categoria e Produto -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4 pb-4 border-b">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 mb-2">Marca*</label>
-                        <select id="item-marca" class="w-full px-4 py-2 border border-gray-300 rounded-lg" onchange="carregarProdutosPorMarca()">
-                            <option value="">Selecione a marca...</option>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Categoria*</label>
+                        <select id="item-categoria" class="w-full px-4 py-2 border border-gray-300 rounded-lg" onchange="carregarProdutosPorCategoria()">
+                            <option value="">Selecione a categoria...</option>
                         </select>
                     </div>
                     <div>
@@ -720,7 +720,7 @@
             }
             
             await loadVenda();
-            await loadMarcasSelect();
+            await loadCategoriasVendaSelect();
             configurarLeitorCodigoBarras();
         })();
 
@@ -804,31 +804,50 @@
             }
         }
 
-        // Carregar marcas no select
-        async function loadMarcasSelect() {
+        // Carregar categorias no select
+        async function loadCategoriasVendaSelect() {
             try {
                 showLoading(true);
-                const marcas = await getMarcas();
-                const selectMarca = document.getElementById('item-marca');
-                selectMarca.innerHTML = '<option value="">Selecione a marca...</option>';
-                marcas.forEach(marca => {
-                    const option = document.createElement('option');
-                    option.value = marca;
-                    option.textContent = marca;
-                    selectMarca.appendChild(option);
+                const categorias = await getCategorias();
+                const selectCategoria = document.getElementById('item-categoria');
+                selectCategoria.innerHTML = '<option value="">Selecione a categoria...</option>';
+                const categoriasUnicas = new Map();
+
+                categorias.forEach(categoria => {
+                    const categoriaMinuscula = categoria.trim().toLocaleLowerCase('pt-BR');
+                    if (!categoriasUnicas.has(categoriaMinuscula)) {
+                        categoriasUnicas.set(
+                            categoriaMinuscula,
+                            categoriaMinuscula.charAt(0).toLocaleUpperCase('pt-BR') + categoriaMinuscula.slice(1)
+                        );
+                    }
                 });
+
+                [...categoriasUnicas.values()]
+                    .sort((a, b) => a.localeCompare(b, 'pt-BR'))
+                    .forEach(categoria => {
+                        const option = document.createElement('option');
+                        option.value = categoria;
+                        option.textContent = categoria;
+                        selectCategoria.appendChild(option);
+                    });
+
+                const optionSemCategoria = document.createElement('option');
+                optionSemCategoria.value = '__sem_categoria__';
+                optionSemCategoria.textContent = 'Sem categoria';
+                selectCategoria.appendChild(optionSemCategoria);
             } finally {
                 showLoading(false);
             }
         }
 
-        // Carregar produtos ao selecionar marca
-        async function carregarProdutosPorMarca() {
-            const marca = document.getElementById('item-marca').value;
+        // Carregar produtos ao selecionar categoria
+        async function carregarProdutosPorCategoria() {
+            const categoria = document.getElementById('item-categoria').value;
             const selectProduto = document.getElementById('item-produto');
             const areaSabores = document.getElementById('area-adicionar-sabor');
             
-            console.log('Marca selecionada:', marca);
+            console.log('Categoria selecionada:', categoria);
             
             // Resetar select de produto
             selectProduto.innerHTML = '<option value="">Selecione o produto...</option>';
@@ -840,18 +859,18 @@
                 if (tbody) tbody.innerHTML = '';
             }
             
-            if (!marca) {
+            if (!categoria) {
                 selectProduto.disabled = true;
                 return;
             }
             
             try {
                 showLoading(true);
-                const produtos = await getProdutosPorMarca(marca);
+                const produtos = await getProdutosPorCategoria(categoria);
                 console.log('Produtos encontrados:', produtos);
                 
                 if (produtos.length === 0) {
-                    showToast('Nenhum produto encontrado para esta marca', 'warning');
+                    showToast('Nenhum produto encontrado para esta categoria', 'warning');
                     selectProduto.disabled = true;
                     return;
                 }
@@ -859,7 +878,8 @@
                 produtos.forEach(p => {
                     const option = document.createElement('option');
                     option.value = p.id;
-                    option.textContent = `${p.nome}`;
+                    option.textContent = p.marca ? `${p.nome} — ${p.marca}` : p.nome;
+                    option.dataset.nome = p.nome;
                     option.dataset.precoVenda = p.preco_venda || p.preco || 0;
                     option.dataset.precoVarejo = p.preco_varejo || 0;
                     option.dataset.precoAtacado = p.preco_atacado || 0;
@@ -896,7 +916,7 @@
                 const tipoPreco = obterTipoPrecoSelecionadoVenda();
                 produtoAtual = {
                     id: produtoId,
-                    nome: option.textContent,
+                    nome: option.dataset.nome || option.textContent,
                     preco_venda: parseFloat(option.dataset.precoVenda || 0),
                     preco_varejo: parseFloat(option.dataset.precoVarejo || 0),
                     preco_atacado: parseFloat(option.dataset.precoAtacado || 0),
@@ -1176,7 +1196,7 @@
             document.getElementById('barcode-sabor').value = '';
             document.getElementById('barcode-quantidade').value = '1';
             document.getElementById('barcode-feedback').classList.add('hidden');
-            document.getElementById('item-marca').value = '';
+            document.getElementById('item-categoria').value = '';
             document.getElementById('item-produto').value = '';
             document.getElementById('item-tipo-preco').value = 'venda';
             document.getElementById('item-produto').disabled = true;

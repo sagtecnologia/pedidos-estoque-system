@@ -78,7 +78,35 @@
             </div>
         </div>
 
-        <!-- Grid de Produtos -->
+        <!-- Abas de categorias -->
+        <div class="bg-white rounded-lg shadow-md p-2 mb-8">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" role="tablist" aria-label="Categorias de produtos">
+                <button
+                    type="button"
+                    id="tab-cigarros-eletronicos"
+                    role="tab"
+                    aria-selected="true"
+                    onclick="selecionarCategoriaPublica('Cigarros eletrônicos')"
+                    class="categoria-tab flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold transition"
+                >
+                    <span>💨 Cigarros eletrônicos</span>
+                    <span id="count-cigarros-eletronicos" class="px-2 py-0.5 rounded-full text-xs"></span>
+                </button>
+                <button
+                    type="button"
+                    id="tab-farmacia"
+                    role="tab"
+                    aria-selected="false"
+                    onclick="selecionarCategoriaPublica('Farmácia')"
+                    class="categoria-tab flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-semibold transition"
+                >
+                    <span>💊 Farmácia</span>
+                    <span id="count-farmacia" class="px-2 py-0.5 rounded-full text-xs"></span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Produtos da categoria selecionada -->
         <div id="produtos-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <div class="col-span-full text-center py-12">
                 <div class="spinner mx-auto mb-4"></div>
@@ -249,6 +277,9 @@
         let sabores = [];
         let reservasPrePedidos = {};
         let modalCarregado = false;
+        const CATEGORIA_CIGARROS_ELETRONICOS = 'Cigarros eletrônicos';
+        const CATEGORIA_FARMACIA = 'Farmácia';
+        let categoriaPublicaSelecionada = CATEGORIA_CIGARROS_ELETRONICOS;
         const tipoPrecoPublico = obterTipoPrecoPublico();
 
         function obterTipoPrecoPublico() {
@@ -503,14 +534,13 @@
                     sabores = sabores.filter(sabor => temPrecoValidoPublico(sabor));
                 }
 
-                // Carregar marcas
-                const marcas = [...new Set(produtos.map(produto => produto.marca).filter(Boolean))].sort();
-                const selectMarca = document.getElementById('filter-marca');
-                selectMarca.innerHTML = '<option value="">Todas as marcas</option>' +
-                    marcas.map(m => `<option value="${m}">${m}</option>`).join('');
+                atualizarFiltroMarcasPublico();
+                atualizarAbasCategoriasPublicas();
 
                 // Renderizar tudo
-                renderizarProdutos();
+                renderizarProdutos(
+                    produtos.filter(produto => normalizarCategoriaPublica(produto.categoria) === categoriaPublicaSelecionada)
+                );
             } catch (error) {
                 console.error('Erro ao carregar:', error);
                 document.getElementById('produtos-container').innerHTML = `
@@ -521,11 +551,83 @@
             }
         }
 
+        function normalizarCategoriaPublica(categoria) {
+            const categoriaNormalizada = (categoria || '')
+                .trim()
+                .toLocaleLowerCase('pt-BR');
+
+            return categoriaNormalizada === 'farmácia' || categoriaNormalizada === 'farmacia'
+                ? CATEGORIA_FARMACIA
+                : CATEGORIA_CIGARROS_ELETRONICOS;
+        }
+
+        function atualizarFiltroMarcasPublico() {
+            const marcas = [...new Set(
+                produtos
+                    .filter(produto => normalizarCategoriaPublica(produto.categoria) === categoriaPublicaSelecionada)
+                    .map(produto => produto.marca)
+                    .filter(Boolean)
+            )].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+                const selectMarca = document.getElementById('filter-marca');
+                selectMarca.innerHTML = '<option value="">Todas as marcas</option>' +
+                    marcas.map(m => `<option value="${m}">${m}</option>`).join('');
+        }
+
+        function atualizarAbasCategoriasPublicas() {
+            const configuracoes = [
+                {
+                    categoria: CATEGORIA_CIGARROS_ELETRONICOS,
+                    tabId: 'tab-cigarros-eletronicos',
+                    countId: 'count-cigarros-eletronicos'
+                },
+                {
+                    categoria: CATEGORIA_FARMACIA,
+                    tabId: 'tab-farmacia',
+                    countId: 'count-farmacia'
+                }
+            ];
+
+            configuracoes.forEach(configuracao => {
+                const ativa = configuracao.categoria === categoriaPublicaSelecionada;
+                const tab = document.getElementById(configuracao.tabId);
+                const contador = document.getElementById(configuracao.countId);
+                const quantidade = produtos.filter(
+                    produto => normalizarCategoriaPublica(produto.categoria) === configuracao.categoria
+                ).length;
+
+                tab.setAttribute('aria-selected', String(ativa));
+                tab.classList.toggle('bg-blue-600', ativa);
+                tab.classList.toggle('text-white', ativa);
+                tab.classList.toggle('shadow-sm', ativa);
+                tab.classList.toggle('bg-gray-100', !ativa);
+                tab.classList.toggle('text-gray-700', !ativa);
+                tab.classList.toggle('hover:bg-gray-200', !ativa);
+
+                contador.textContent = quantidade;
+                contador.className = ativa
+                    ? 'px-2 py-0.5 rounded-full text-xs bg-white/20 text-white'
+                    : 'px-2 py-0.5 rounded-full text-xs bg-gray-200 text-gray-600';
+            });
+        }
+
+        function selecionarCategoriaPublica(categoria) {
+            if (![CATEGORIA_CIGARROS_ELETRONICOS, CATEGORIA_FARMACIA].includes(categoria)) return;
+
+            categoriaPublicaSelecionada = categoria;
+            document.getElementById('filter-marca').value = '';
+            atualizarFiltroMarcasPublico();
+            atualizarAbasCategoriasPublicas();
+            aplicarFiltros();
+        }
+
         function aplicarFiltros() {
             const marca = document.getElementById('filter-marca').value;
             const busca = document.getElementById('busca-produto').value.toLowerCase();
 
-            let produtosFiltrados = produtos;
+            let produtosFiltrados = produtos.filter(
+                produto => normalizarCategoriaPublica(produto.categoria) === categoriaPublicaSelecionada
+            );
 
             if (marca) {
                 produtosFiltrados = produtosFiltrados.filter(p => p.marca === marca);
@@ -544,7 +646,7 @@
         function limparFiltros() {
             document.getElementById('filter-marca').value = '';
             document.getElementById('busca-produto').value = '';
-            renderizarProdutos();
+            aplicarFiltros();
         }
 
         function renderizarProdutos(produtosRender = produtos) {
@@ -559,7 +661,9 @@
                 return;
             }
 
-            container.innerHTML = produtosRender.map(produto => {
+            container.innerHTML = produtosRender
+                .sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))
+                .map(produto => {
                 const reservaProduto = reservasPrePedidos[produto.id];
                 const reservaTotal = reservaProduto ? reservaProduto.total : 0;
                 const estoqueDisponivel = Math.max(0, produto.estoque_atual - reservaTotal);
